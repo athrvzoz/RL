@@ -1,0 +1,15 @@
+==================================================================
+Training A2C on Acrobot-v1: 8 games at once, n_steps = 5
+==================================================================
+   step  40,000  avg return (last 20 games)  -122.8  entropy 0.429  (6s)
+   step  80,000  avg return (last 20 games)   -80.3  entropy 0.332  (11s)
+   step 120,000  avg return (last 20 games)   -87.9  entropy 0.152  (16s)
+   step 160,000  avg return (last 20 games)   -84.2  entropy 0.117  (21s)
+   step 200,000  avg return (last 20 games)   -80.0  entropy 0.132  (26s)
+
+  Games finished during training: 1995
+  First 50 games: avg -227.7     last 50 games: avg -88.9
+  Exam, greedy : avg -80.7  (best -69, worst -115)
+  Exam, sampled: avg -83.8
+
+Chart saved to acrobot_a2c.png

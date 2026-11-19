@@ -1,0 +1,32 @@
+================================================================
+PART 1 · Fixed policies vs the spy (3,000 rounds each)
+================================================================
+  always rock (like argmax Q)  average score per round -1.000
+  70% rock, 30% paper          average score per round -0.701
+  1/3 each (random)            average score per round +0.001
+
+================================================================
+PART 2 · REINFORCE vs a biased opponent: rock 50%, paper 25%, scissors 25%
+================================================================
+     round    rock   paper  scissors
+         0   0.333   0.333   0.333
+        50   0.376   0.366   0.258
+       200   0.367   0.459   0.174
+       500   0.147   0.798   0.055
+      1000   0.050   0.919   0.031
+      2000   0.015   0.975   0.010
+  average score over all 2,000 rounds: +0.206   (always-paper would get +0.250)
+
+================================================================
+PART 3 · REINFORCE vs the spy
+================================================================
+     round    rock   paper  scissors
+         0   0.333   0.333   0.333
+       500   0.084   0.096   0.820
+      1000   0.848   0.071   0.082
+      2000   0.065   0.093   0.842
+      3000   0.025   0.960   0.015
+  largest probability ever reached after round 500: 0.984
+  average score over all 3,000 rounds: +0.040
+
+Chart saved to rps_probs.png

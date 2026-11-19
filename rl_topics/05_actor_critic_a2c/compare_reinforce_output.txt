@@ -1,0 +1,22 @@
+REINFORCE seed 0: 1039 games, 1039 updates, exam (greedy, 20 games) 171.8   [16s]
+A2C       seed 0:  948 games, 3000 updates, exam (greedy, 20 games) 500.0   [28s]
+REINFORCE seed 1:  913 games, 913 updates, exam (greedy, 20 games) 186.1   [37s]
+A2C       seed 1:  802 games, 3000 updates, exam (greedy, 20 games) 500.0   [28s]
+REINFORCE seed 2:  955 games, 955 updates, exam (greedy, 20 games) 143.3   [33s]
+A2C       seed 2:  793 games, 3000 updates, exam (greedy, 20 games) 500.0   [11s]
+
+======================================================================
+SUMMARY (120,000 environment steps each)
+======================================================================
+                        avg score of last 50 training games      exam (greedy)
+                         seed 0   seed 1   seed 2   mean           mean
+  REINFORCE                 43.2    169.6    118.0   110.2          167.1
+  A2C                      436.0    407.5    232.1   358.5          500.0
+  REINFORCE    avg jump of the curve between 2k-step checkpoints:  27.2
+  A2C          avg jump of the curve between 2k-step checkpoints:  38.8
+
+  Noise in the learning signal (std of the weight on grad log pi, average over updates):
+    REINFORCE  weight = G_t          std  16.51
+    A2C        weight = advantage    std   2.25
+
+Chart saved to compare_reinforce.png

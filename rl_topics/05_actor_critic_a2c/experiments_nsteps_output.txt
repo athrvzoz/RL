@@ -1,0 +1,9 @@
+setting              seed  updates  last-50 avg   exam  final entropy   time
+n_steps = 1             0    10000        347.2  500.0          0.405    15s
+n_steps = 1             1    10000        499.5  500.0          0.313    14s
+n_steps = 5             0     2000        114.7  251.6          0.523     7s
+n_steps = 5             1     2000        170.7  385.0          0.463     7s
+n_steps = 20            0      500        101.0  146.6          0.489     6s
+n_steps = 20            1      500        304.8  358.9          0.505     6s
+
+Chart saved to experiments_nsteps.png

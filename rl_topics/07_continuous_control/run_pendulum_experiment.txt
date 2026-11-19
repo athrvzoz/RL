@@ -1,0 +1,81 @@
+Random torques score -1112.0 per game (200 steps). Best possible is about -150.
+
+========================================================================
+DDPG: 15,000 steps on Pendulum-v1 (seed 0)
+========================================================================
+    step  1,000   test score  -1046.6   critic thinks start is worth     0.1, really  -454.6   (   0s)
+    step  2,000   test score  -1404.8   critic thinks start is worth   -10.5, really  -565.6   (   6s)
+    step  3,000   test score   -665.7   critic thinks start is worth   -27.7, really  -298.1   (  12s)
+    step  4,000   test score   -128.2   critic thinks start is worth   -52.8, really  -106.9   (  18s)
+    step  5,000   test score    -99.9   critic thinks start is worth   -72.3, really   -88.6   (  23s)
+    step  6,000   test score    -98.2   critic thinks start is worth   -81.5, really   -87.5   (  31s)
+    step  7,000   test score    -97.0   critic thinks start is worth   -87.3, really   -87.4   (  37s)
+    step  8,000   test score    -97.8   critic thinks start is worth   -88.3, really   -87.5   (  42s)
+    step  9,000   test score    -96.8   critic thinks start is worth   -87.5, really   -87.3   (  48s)
+    step 10,000   test score    -96.4   critic thinks start is worth   -85.9, really   -87.1   (  59s)
+    step 11,000   test score    -97.1   critic thinks start is worth   -85.3, really   -87.3   (  72s)
+    step 12,000   test score    -96.4   critic thinks start is worth   -83.6, really   -87.1   (  79s)
+    step 13,000   test score    -96.7   critic thinks start is worth   -79.7, really   -87.1   (  86s)
+    step 14,000   test score    -96.8   critic thinks start is worth   -77.7, really   -87.4   (  92s)
+    step 15,000   test score    -97.2   critic thinks start is worth   -75.4, really   -87.9   ( 100s)
+
+  final test score -97.2   best -96.4   time 100s
+  swing-up from hanging down: total reward -362.5, first within 6° of upright at step 76
+  first 10 torques: [-1.98, -2.0, -2.0, -2.0, -2.0, -2.0, -2.0, -2.0, -2.0, -2.0]
+
+========================================================================
+TD3: 15,000 steps on Pendulum-v1 (seed 0)
+========================================================================
+    step  1,000   test score  -1046.6   critic thinks start is worth     0.1, really  -454.6   (   0s)
+    step  2,000   test score  -1445.8   critic thinks start is worth    -5.3, really  -593.6   (   9s)
+    step  3,000   test score  -1244.0   critic thinks start is worth   -11.0, really  -493.2   (  18s)
+    step  4,000   test score   -792.6   critic thinks start is worth   -18.7, really  -348.4   (  28s)
+    step  5,000   test score   -165.1   critic thinks start is worth   -28.8, really  -125.0   (  38s)
+    step  6,000   test score   -130.3   critic thinks start is worth   -42.3, really  -108.9   (  48s)
+    step  7,000   test score   -128.3   critic thinks start is worth   -55.9, really  -106.0   (  57s)
+    step  8,000   test score   -100.9   critic thinks start is worth   -68.4, really   -88.9   (  66s)
+    step  9,000   test score    -99.6   critic thinks start is worth   -78.0, really   -88.8   (  74s)
+    step 10,000   test score    -97.6   critic thinks start is worth   -83.9, really   -87.3   (  81s)
+    step 11,000   test score    -97.8   critic thinks start is worth   -88.4, really   -87.5   (  87s)
+    step 12,000   test score    -97.0   critic thinks start is worth   -91.8, really   -87.1   (  93s)
+    step 13,000   test score    -97.1   critic thinks start is worth   -95.2, really   -87.2   (  98s)
+    step 14,000   test score    -96.9   critic thinks start is worth   -95.6, really   -87.3   ( 103s)
+    step 15,000   test score    -96.4   critic thinks start is worth   -97.0, really   -87.0   ( 109s)
+
+  final test score -96.4   best -96.4   time 109s
+  swing-up from hanging down: total reward -364.2, first within 6° of upright at step 73
+  first 10 torques: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+
+========================================================================
+SAC: 15,000 steps on Pendulum-v1 (seed 0)
+========================================================================
+    step  1,000   test score  -1044.0   critic thinks start is worth    -0.1, really  -451.4   (   0s)
+    step  2,000   test score  -1630.0   critic thinks start is worth   -11.3, really  -636.3   (   8s)
+    step  3,000   test score   -705.0   critic thinks start is worth   -32.5, really  -310.1   (  16s)
+    step  4,000   test score   -207.9   critic thinks start is worth   -59.4, really  -153.4   (  24s)
+    step  5,000   test score   -124.2   critic thinks start is worth   -82.0, really  -103.4   (  32s)
+    step  6,000   test score    -97.8   critic thinks start is worth   -90.1, really   -87.9   (  41s)
+    step  7,000   test score    -98.4   critic thinks start is worth   -97.4, really   -88.1   (  49s)
+    step  8,000   test score    -96.8   critic thinks start is worth  -102.7, really   -87.5   (  58s)
+    step  9,000   test score    -96.7   critic thinks start is worth  -104.9, really   -87.4   (  66s)
+    step 10,000   test score    -96.7   critic thinks start is worth  -105.9, really   -87.5   (  75s)
+    step 11,000   test score    -96.6   critic thinks start is worth  -106.1, really   -87.5   (  83s)
+    step 12,000   test score    -96.6   critic thinks start is worth  -104.7, really   -87.5   (  92s)
+    step 13,000   test score    -96.5   critic thinks start is worth  -103.7, really   -87.5   ( 100s)
+    step 14,000   test score    -96.3   critic thinks start is worth  -100.5, really   -87.4   ( 109s)
+    step 15,000   test score    -96.1   critic thinks start is worth   -98.1, really   -87.3   ( 117s)
+
+  final test score -96.1   best -96.1   time 117s
+  swing-up from hanging down: total reward -350.4, first within 6° of upright at step 69
+  first 10 torques: [-1.91, -2.0, -2.0, -2.0, -2.0, -2.0, -2.0, -2.0, -1.99, -1.99]
+
+========================================================================
+SUMMARY (test score = average total reward over 5 games, higher is better)
+========================================================================
+            1,000    3,000    5,000    7,000    9,000   11,000   13,000   15,000
+  DDPG      -1047     -666     -100      -97      -97      -97      -97      -97
+  TD3       -1047    -1244     -165     -128     -100      -98      -97      -96
+  SAC       -1044     -705     -124      -98      -97      -97      -96      -96
+
+Saved: pendulum_curves.png, pendulum_policy_maps.png, pendulum_swing.png,
+       pendulum_critic_vs_real.png, results.json, models/

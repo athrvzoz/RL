@@ -1,0 +1,86 @@
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>Running it: CartPole</h2>
+<p class="sub">Real output of <code>python cartpole_a2c.py</code>: 200,000 steps over 8 game copies, n = 5, about 33 seconds.</p>
+
+<pre>
+step  20,000  avg return (last 20 games)   56.0  entropy 0.538
+step  40,000  avg return (last 20 games)  370.8  entropy 0.567
+step  60,000  avg return (last 20 games)   47.6  entropy 0.444      ← a collapse
+step 100,000  avg return (last 20 games)  336.1  entropy 0.499
+step 140,000  avg return (last 20 games)  342.6  entropy 0.564
+step 200,000  avg return (last 20 games)  415.1  entropy 0.560
+
+First game that reached the 500-step limit: at step 16,248
+Exam, 20 new games:  greedy (most likely action)  avg 500.0, min 500
+                     sampled (roll the dice)      avg 398.1, min 120
+</pre>
+
+<figure><img src="file:///D:/Langchain/rl_topics/05_actor_critic_a2c/cartpole_a2c.png" alt="A2C learning curve, entropy, critic values"><figcaption>Top left: score per game. Top right: the actor's entropy. Bottom left: the critic's V(s) along one game, early vs final. Bottom right: the final critic's verdict as the pole spins faster.</figcaption></figure>
+
+<h3>Inside the critic: what it learned</h3>
+<table>
+<tr><th>Pole upright, spinning at (rad/s)</th><th class="n">early critic V (20k steps)</th><th class="n">final critic V (200k steps)</th></tr>
+<tr><td>0.0</td><td class="n">25.1</td><td class="n"><b>100.0</b></td></tr>
+<tr><td>1.0</td><td class="n">25.0</td><td class="n">97.7</td></tr>
+<tr><td>1.5</td><td class="n">24.9</td><td class="n">84.4</td></tr>
+<tr><td>2.0</td><td class="n">24.8</td><td class="n">65.1</td></tr>
+<tr><td>3.0</td><td class="n">24.2</td><td class="n"><b>46.9</b></td></tr>
+</table>
+<ul>
+<li>The <b>early</b> critic gives every state about 25: it hasn't learned to tell states apart yet.</li>
+<li>The <b>final</b> critic knows a calm pole is worth the maximum, 1/(1 − 0.99) = <b>100</b>, and a fast-spinning one much less: <b>"a fast-falling pole is bad news"</b>. That's exactly the information the actor needs to judge its moves.</li>
+<li>Along a perfect 500-step game, the final critic says V ≈ 100 at every step, even at step 499. That's correct: the time limit is not a real end (chapter 09's <code>final_obs</code> trick).</li>
+</ul>
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>Experiments</h2>
+<p class="sub">Real output of <code>experiments.py</code> (80,000 steps, 2 seeds each), <code>acrobot_a2c.py</code> and <code>compare_reinforce.py</code>.</p>
+
+<h3>A · Entropy bonus</h3>
+<table>
+<tr><th>ent_coef</th><th class="n">exam score, seed 0 / seed 1</th><th class="n">final entropy</th></tr>
+<tr><td>0 (no bonus)</td><td class="n">150.0 / 269.0</td><td class="n">0.46 / 0.48</td></tr>
+<tr><td>0.01 (default)</td><td class="n">251.6 / 385.0</td><td class="n">0.52 / 0.46</td></tr>
+<tr><td>0.1</td><td class="n">220.9 / <b>500.0</b></td><td class="n">0.55 / 0.56</td></tr>
+</table>
+<p>A bigger bonus kept the actor more unsure (higher entropy) and gave the best single result here. With only 80,000 steps and 2 seeds the differences are hints, not proof.</p>
+
+<h3>B · n-step: how far to look before trusting the critic</h3>
+<table>
+<tr><th>n_steps</th><th class="n">updates</th><th class="n">exam score, seed 0 / seed 1</th></tr>
+<tr><td>1 (pure TD)</td><td class="n">10,000</td><td class="n"><b>500.0 / 500.0</b></td></tr>
+<tr><td>5 (default)</td><td class="n">2,000</td><td class="n">251.6 / 385.0</td></tr>
+<tr><td>20</td><td class="n">500</td><td class="n">146.6 / 358.9</td></tr>
+</table>
+<p>With the same 80,000 steps, n = 1 makes <b>5× more updates</b> than n = 5, and on CartPole that won clearly. The lesson isn't "n = 1 is always best". With the same number of steps, a smaller n means more, smaller learning steps, and CartPole's critic becomes accurate quickly, so trusting it early pays off.</p>
+
+<h3>C · Separate networks vs a shared body</h3>
+<table>
+<tr><th>setup</th><th class="n">exam score, seed 0 / seed 1</th></tr>
+<tr><td>separate actor and critic</td><td class="n"><b>251.6 / 385.0</b></td></tr>
+<tr><td>shared body, two heads</td><td class="n">122.2 / 115.2</td></tr>
+</table>
+<p>Sharing layers saves computation, but the critic's large squared errors (values up to 100) can drown out the actor's small signal in the shared weights. Here separate networks won clearly.</p>
+
+<h3>D · A new game with the same code: Acrobot</h3>
+<p>Acrobot: two linked poles hanging down; push the "elbow" left, right or not at all (3 actions); −1 every step until the tip swings above a line. A random player scores about −500.</p>
+<pre>
+First 50 games: avg −227.7      last 50 games: avg −88.9
+Exam, greedy: avg −80.7 (best −69, worst −115)      sampled: avg −83.8
+</pre>
+<figure><img style="max-width:150mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/05_actor_critic_a2c/acrobot_a2c.png" alt="A2C on Acrobot"><figcaption>Score improves from about −230 to −85 (it swings up in ~80 steps). The entropy falls from ln 3 = 1.10 (all 3 actions equal) towards 0.1 as the actor becomes sure of its swinging rhythm.</figcaption></figure>
+
+<h3>E · A2C vs REINFORCE, same budget (120,000 steps, 3 seeds)</h3>
+<table>
+<tr><th></th><th class="n">avg of last 50 training games (seeds 0 / 1 / 2)</th><th class="n">exam, greedy (mean)</th><th class="n">updates</th></tr>
+<tr><td>REINFORCE</td><td class="n">43.2 / 169.6 / 118.0</td><td class="n">167.1</td><td class="n">~950 (one per game)</td></tr>
+<tr><td><b>A2C</b></td><td class="n"><b>436.0 / 407.5 / 232.1</b></td><td class="n"><b>500.0</b> (all 3 seeds)</td><td class="n">3,000</td></tr>
+</table>
+<pre>
+Noise in the learning signal (spread of the weight multiplying ∇log π):
+  REINFORCE  weight = G_t          spread 16.51
+  A2C        weight = advantage    spread  2.25      ← about 7× calmer
+</pre>
+<p>This is the whole booklet in one experiment: replacing the noisy return G with the critic's advantage made the signal about <b>7× less noisy</b> and allowed <b>3× more updates</b> (every 5 steps instead of once per game). A2C reached a perfect exam on every seed; REINFORCE didn't on any. (One honest detail: A2C's score <i>curve</i> moved around more between checkpoints, 38.8 vs 27.2, because it climbs to high scores and its swings up there are larger. "Less noisy signal" doesn't mean "perfectly smooth curve".)</p>
+<figure><img style="max-width:150mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/05_actor_critic_a2c/compare_reinforce.png" alt="A2C vs REINFORCE learning curves"><figcaption>A2C vs REINFORCE with the same number of environment steps.</figcaption></figure>
+

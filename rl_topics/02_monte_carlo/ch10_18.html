@@ -1,0 +1,284 @@
+<!-- ═══════════════════ 10 EXPERIMENTS ═══════════════════ -->
+<h2><span class="n">10</span>Experiments: turning the knobs</h2>
+<p class="sub">Real output of <code>python experiments.py</code>. Every learned policy is tested on 50,000 games with no exploration.</p>
+
+<figure><img src="file:///D:/Langchain/rl_topics/02_monte_carlo/experiments.png" alt="Average result per game for each experiment"><figcaption>Average result per game (0 = break even). Every learner beats the fixed "stick on 20+" rule by a lot. The house still wins slightly: no policy reaches 0.</figcaption></figure>
+
+<h3>A · How many training games?</h3>
+<table>
+<tr><th>Training games (ε = 0.1)</th><th class="n">win %</th><th class="n">draw %</th><th class="n">loss %</th><th class="n">avg result</th></tr>
+<tr><td>stick on 20+ (no learning)</td><td class="n">29.9</td><td class="n">5.4</td><td class="n">64.6</td><td class="n">−0.347</td></tr>
+<tr><td>10,000</td><td class="n">40.9</td><td class="n">7.3</td><td class="n">51.7</td><td class="n">−0.108</td></tr>
+<tr><td>50,000</td><td class="n">42.2</td><td class="n">7.8</td><td class="n">49.9</td><td class="n">−0.077</td></tr>
+<tr><td>200,000</td><td class="n">43.3</td><td class="n">8.2</td><td class="n">48.5</td><td class="n"><b>−0.052</b></td></tr>
+</table>
+<p>More games = more returns averaged per (state, action) = less noise = better choices. Monte Carlo is <b>sample-hungry</b>: each game teaches only the 1–3 states it visited, and each answer is a noisy ±1.</p>
+
+<h3>B · How much exploration? (100,000 games)</h3>
+<table>
+<tr><th>ε</th><th class="n">test avg</th><th class="n">training avg</th><th class="n">states with an action never tried</th></tr>
+<tr><td>0.01</td><td class="n">−0.123</td><td class="n">−0.131</td><td class="n"><b>10</b></td></tr>
+<tr><td>0.1</td><td class="n"><b>−0.062</b></td><td class="n">−0.106</td><td class="n">0</td></tr>
+<tr><td>0.3</td><td class="n">−0.062</td><td class="n">−0.160</td><td class="n">0</td></tr>
+</table>
+<ul>
+<li><b>ε = 0.01</b>: too little exploring. 10 states never tried one of their two actions, so the agent can't know whether it's better. Same lesson as FrozenLake: unvisited means unknown.</li>
+<li><b>ε = 0.3</b>: the learned policy is just as good, but training games are worse (−0.160), because 30% of moves are random.</li>
+</ul>
+
+<h3>C · Exploring starts</h3>
+<p>Instead of ε-greedy, start each game with a <b>random first action</b>, then play greedily. Every (state, action) pair still gets tried, but the rest of each game is played well, so the returns are cleaner.</p>
+<table>
+<tr><th>Method (100,000 games)</th><th class="n">win %</th><th class="n">draw %</th><th class="n">loss %</th><th class="n">avg</th></tr>
+<tr><td>MC, ε = 0.1</td><td class="n">42.9</td><td class="n">8.0</td><td class="n">49.1</td><td class="n">−0.062</td></tr>
+<tr><td>MC, exploring starts</td><td class="n">43.3</td><td class="n">9.0</td><td class="n">47.7</td><td class="n"><b>−0.044</b></td></tr>
+</table>
+
+<h3>D · Monte Carlo vs Q-learning on Blackjack (100,000 games, ε = 0.1)</h3>
+<table>
+<tr><th>Method</th><th class="n">avg result</th></tr>
+<tr><td>MC, ε = 0.1</td><td class="n">−0.062</td></tr>
+<tr><td>Q-learning, α = 0.05</td><td class="n">−0.052</td></tr>
+<tr><td>Q-learning, α = 0.01</td><td class="n">−0.048</td></tr>
+</table>
+<p>They're about the same here. Blackjack games are only 1–3 moves long, so "wait for the end" costs almost nothing, and TD's one-step advantage is small. On long games (next chapter) the difference is big.</p>
+
+<!-- ═══════════════════ 11 MC VS TD ═══════════════════ -->
+<h2><span class="n">11</span>Monte Carlo vs TD (Q-learning's way)</h2>
+<p class="sub">Real output of <code>python mc_vs_td.py</code>. The same game, updated two ways.</p>
+
+<h3>One game, two learners</h3>
+<pre>
+Game:  A --(r=0)--> B --(r=−1)--> C --(r=+10)--> END        γ = 0.9,  α = 0.5
+Guesses before the game:  V(A) = 2.0   V(B) = 4.0   V(C) = 6.0
+
+MONTE CARLO: play to the END first, then walk BACKWARDS
+  C:  G = +10                    = 10.00    V(C) = 6.00 + 0.5 × (10.00 − 6.00) = 8.00
+  B:  G = −1 + 0.9 × 10.00       =  8.00    V(B) = 4.00 + 0.5 × (8.00 − 4.00)  = 6.00
+  A:  G = +0 + 0.9 × 8.00        =  7.20    V(A) = 2.00 + 0.5 × (7.20 − 2.00)  = 4.60
+
+TD(0): update DURING the game, after every step, using the next state's GUESS
+  A:  target = 0 + 0.9 × V(B)=4.00   =  3.60    V(A) = 2.00 + 0.5 × (3.60 − 2.00)  = 2.80
+  B:  target = −1 + 0.9 × V(C)=6.00  =  4.40    V(B) = 4.00 + 0.5 × (4.40 − 4.00)  = 4.20
+  C:  target = END: no future        = 10.00    V(C) = 6.00 + 0.5 × (10.00 − 6.00) = 8.00
+
+After ONE game:   MC  V(A)=4.60  V(B)=6.00  V(C)=8.00
+                  TD  V(A)=2.80  V(B)=4.20  V(C)=8.00
+</pre>
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">Monte Carlo</span>
+<p>The good news (+10) reached <b>A, B and C in one game</b>. But it waited until the end, and it used one game's luck as the full truth.</p></div>
+<div class="box ok" style="margin:0"><span class="tag">TD(0)</span>
+<p>Only <b>C</b> heard the +10. A and B used old guesses (4.0, 6.0). The news will reach them in later games: the "ripple back one square per game" you saw in FrozenLake.</p></div>
+</div>
+
+<h3>Bias vs variance: why TD often learns faster anyway</h3>
+<p>On the 5-square random walk (true value of C = 0.5), the code measured the <b>target</b> each method uses for C over 10,000 games:</p>
+<table>
+<tr><th>Target for state C</th><th class="n">average</th><th class="n">spread (std)</th><th>possible values</th></tr>
+<tr><td>MC: the real final reward</td><td class="n">0.502</td><td class="n"><b>0.500</b></td><td>0 or 1</td></tr>
+<tr><td>TD: r + V(next), with good guesses</td><td class="n">0.498</td><td class="n"><b>0.167</b></td><td>0.333 or 0.667</td></tr>
+<tr><td>TD: r + V(next), with bad guesses (all 0)</td><td class="n"><b>0.000</b></td><td class="n">0.000</td><td>0</td></tr>
+</table>
+<ul>
+<li><b>MC is unbiased but noisy (high variance):</b> on average it's right (0.502), but each single target is 0 or 1, far from 0.5.</li>
+<li><b>TD is less noisy but can be biased:</b> with good guesses its targets are much closer (spread 0.167 vs 0.5). With bad guesses it's confidently wrong (always 0) until the guesses improve.</li>
+</ul>
+<figure><img src="file:///D:/Langchain/rl_topics/02_monte_carlo/mc_vs_td_randomwalk.png" alt="Random walk error, MC vs TD"><figcaption>Error over 100 games, average of 100 runs. TD (blue) drops much faster than MC (orange) on this problem: after 50 games TD α = 0.05 has error 0.055, the best MC 0.112.</figcaption></figure>
+
+<!-- ═══════════════════ 12 OFF-POLICY ═══════════════════ -->
+<h2><span class="n">12</span>Off-policy: learning from others' games</h2>
+<p class="sub">Real output of <code>python off_policy.py</code>. Intuition only, with light maths.</p>
+
+<p><b>The question:</b> how good is the state (sum 13, dealer shows 2, usable ace) if I play <b>"stick on 20+"</b> (my <i>target policy</i> π)? But I have no games of my own. I only have games played by someone pressing <b>random buttons</b> (the <i>behaviour policy</i> b: hit or stick, 50/50).</p>
+
+<h3>The trick: re-weight each game</h3>
+<p>A random game that happens to look like something <i>I</i> would play is useful evidence. A game where the random player did something I would never do tells me nothing about my policy. The weight is called the <b>importance-sampling ratio</b>:</p>
+<pre style="font-size:9.6pt">
+ρ  =  product over the moves of   π(a|s) / b(a|s)
+
+    my policy would ALSO choose a:   π = 1,  b = 0.5   →  factor 1 / 0.5 = 2
+    my policy would NEVER choose a:  π = 0             →  factor 0  (the whole game counts 0)
+</pre>
+
+<h3>Five real random games</h3>
+<pre>
+game 1: 13:hit, 13:hit        result G = −1   ρ = 2 × 2 = 4   (I'd hit too, both times)
+game 2: 13:hit, 15:stick      result G = −1   ρ = 0           (I'd never stick on 15)
+game 3: 13:stick              result G = +1   ρ = 0           (I'd never stick on 13)
+game 4: 13:stick              result G = +1   ρ = 0
+game 5: 13:stick              result G = −1   ρ = 0
+</pre>
+<p>Only game 1 looks like my policy, and it counts 4 times as much, because a random player follows my policy for two moves only 1 time in 4 (0.5 × 0.5).</p>
+
+<h3>Two ways to average</h3>
+<pre>
+ordinary IS:   V = Σ ρ·G / (number of games)          unbiased, but can be wild
+weighted IS:   V = Σ ρ·G / Σ ρ                        slightly biased, much calmer
+</pre>
+<table>
+<tr><th class="n">Random games used</th><th class="n">ordinary IS error</th><th class="n">weighted IS error</th></tr>
+<tr><td class="n">10</td><td class="n">1.209</td><td class="n"><b>0.540</b></td></tr>
+<tr><td class="n">100</td><td class="n">0.107</td><td class="n">0.108</td></tr>
+<tr><td class="n">1000</td><td class="n">0.014</td><td class="n">0.015</td></tr>
+</table>
+<p>True value (from playing "stick on 20+" itself 100,000 times): <b>−0.281</b> (Sutton &amp; Barto report −0.277). After 1,000 random games both estimates average about −0.26.</p>
+<figure><img src="file:///D:/Langchain/rl_topics/02_monte_carlo/off_policy.png" alt="Ordinary vs weighted importance sampling error"><figcaption>Ordinary IS (orange) is very wild for the first few dozen games; weighted IS (blue) is calm from the start. They meet after about 30 games.</figcaption></figure>
+
+<div class="box plain"><span class="tag">Connect it to Q-learning</span>
+<p>Q-learning is also off-policy (it explores but learns about the greedy policy), yet it needs <b>no ratios</b>. Its target uses <code>max Q[s2]</code>, a guess about what the greedy policy would do next, instead of the real rest of the game. Monte Carlo uses the real rest of the game, which was played by the explorer, so it must re-weight. That's one more reason TD-style methods became so popular.</p>
+</div>
+
+<!-- ═══════════════════ 13 REAL WORLD ═══════════════════ -->
+<h2><span class="n">13</span>Real-world problems</h2>
+<p class="sub">Monte Carlo fits whenever the result only becomes clear at the end, and episodes really do end.</p>
+
+<div class="box plain"><span class="tag">When to reach for Monte Carlo</span>
+<p>✔ Episodes are fairly short and always finish. ✔ You can't trust step-by-step guesses (the state doesn't capture everything). ✔ You have a simulator you can run many times. ✘ Avoid it for never-ending tasks, or very long episodes where waiting is costly.</p>
+</div>
+
+<h3>1 · A sales call script</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>stage of the call (greeting / needs / offer / objection), customer mood (estimated), offer already made?</td></tr>
+<tr><td><b>Action</b></td><td>ask a question / present offer A / present offer B / give a discount / end the call politely</td></tr>
+<tr><td><b>Reward</b></td><td>0 during the call; at the end: +profit if the customer buys, 0 if not; small −1 for very long calls</td></tr>
+<tr><td><b>Episode</b></td><td>one call (a few minutes, always ends)</td></tr>
+<tr><td><b>Why MC</b></td><td>Whether a step was good is only known at the end (sale or not). The average of final results per (stage, action) is exactly what MC computes.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Customers differ a lot: big variance, so you need many calls. You could use off-policy MC (importance sampling) to evaluate a new script from recorded calls made with the old script.</td></tr>
+</table>
+
+<h3>2 · Choosing a treatment plan in a simulated patient</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>week of treatment, measured symptoms band, side-effect level</td></tr>
+<tr><td><b>Action</b></td><td>continue dose / increase / decrease / switch drug</td></tr>
+<tr><td><b>Reward</b></td><td>at the end of the course: +10 if recovered, −10 if not, minus side-effect penalties</td></tr>
+<tr><td><b>Episode</b></td><td>one full treatment course</td></tr>
+<tr><td><b>Why MC</b></td><td>Outcomes arrive at the end; researchers evaluate dosing rules in <b>simulated patients</b> first. MC evaluates a fixed rule by averaging outcomes, with no bootstrapped guesses about half-finished treatments.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Never learn by exploring on real patients. Real medical decisions need clinical trials and doctors. This is a "could be used for" in research simulations only.</td></tr>
+</table>
+
+<h3>3 · Game AI evaluated by self-play</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>the board position</td></tr>
+<tr><td><b>Action</b></td><td>a legal move</td></tr>
+<tr><td><b>Reward</b></td><td>+1 win, 0 draw, −1 loss, only at the end</td></tr>
+<tr><td><b>Why MC</b></td><td>"Play the game to the end many times and average the result" is exactly how <b>Monte Carlo Tree Search</b> judges positions, the planning method in booklet 08 (used in AlphaGo).</td></tr>
+</table>
+
+<h3>4 · Evaluating an ad campaign rule</h3>
+<p>State = user's journey stage; action = which ad to show; reward = purchase at the end of a session. You often have logs from the <b>old</b> rule. Off-policy MC with importance sampling estimates how a <b>new</b> rule would have done, before risking money on it. The same weighting idea (ρ) is used in practice for "offline evaluation" of recommendation and ad systems.</p>
+
+<!-- ═══════════════════ 14 SIDE BY SIDE ═══════════════════ -->
+<h2><span class="n">14</span>Side by side</h2>
+<p class="sub">Monte Carlo next to the methods you already know.</p>
+
+<table class="long">
+<tr><th style="width:22%"></th><th>Value iteration</th><th>Monte Carlo</th><th>TD(0) / Q-learning</th></tr>
+<tr><td>Needs the rule book?</td><td>yes</td><td><b>no</b></td><td>no</td></tr>
+<tr><td>Target</td><td>Σ P·[r + γV(s′)]</td><td><b>the real return G</b></td><td>r + γ·(guess at s′)</td></tr>
+<tr><td>Uses its own guesses? (bootstrapping)</td><td>yes</td><td><b>no</b></td><td>yes</td></tr>
+<tr><td>When it updates</td><td>sweeps</td><td><b>after the game ends</b>, walking backwards</td><td>after every step</td></tr>
+<tr><td>States updated per game</td><td>all (no games)</td><td><b>every state visited</b></td><td>one per step</td></tr>
+<tr><td>Bias</td><td>none (exact)</td><td><b>none</b></td><td>yes, early on (wrong guesses)</td></tr>
+<tr><td>Variance (noise)</td><td>none</td><td><b>high</b></td><td>lower</td></tr>
+<tr><td>Needs episodes to end?</td><td>no</td><td><b>yes</b></td><td>no</td></tr>
+<tr><td>Learning off-policy</td><td>—</td><td>needs importance sampling ratios</td><td>Q-learning: just use max</td></tr>
+<tr><td>Blackjack (100k games)</td><td>—</td><td>−0.062 (ε = 0.1), −0.044 (exploring starts)</td><td>Q-learning −0.052 / −0.048</td></tr>
+<tr><td>Random walk error after 50 games</td><td>—</td><td>0.112 (best α)</td><td><b>0.055</b> (TD, α = 0.05)</td></tr>
+<tr><td>Best when</td><td>you know the rules, small world</td><td>short episodes, end result is what matters, guesses unreliable</td><td>long or never-ending tasks, learn quickly</td></tr>
+</table>
+
+<div class="box key"><span class="tag">Remember</span>
+<p>Monte Carlo = "average the real final results". TD = "use one real step and a guess". Everything in between (n-step, TD(λ), GAE in PPO) is a mix of the two.</p>
+</div>
+
+<!-- ═══════════════════ 15 CONFUSIONS ═══════════════════ -->
+<h2><span class="n">15</span>Clearing up the confusions</h2>
+<p class="sub">Short, correct answers to common beginner questions.</p>
+
+<div class="qa"><div class="q">Does Q-learning wait for the end and update backwards?</div><p><b>No.</b> That's Monte Carlo. Q-learning updates after every step using its guess of the next state.</p></div>
+<div class="qa"><div class="q">Why walk backwards? Couldn't we go forwards?</div><p>You could, but backwards is efficient: G at step t = r<sub>t+1</sub> + γ·(G at step t+1). Walking backwards needs one multiply and one add per step.</p></div>
+<div class="qa"><div class="q">Does Monte Carlo use the Bellman equation?</div><p>Not as an update rule. It never plugs in a guess of the next state. But the values it converges to do satisfy Bellman's equation, because they are the true averages.</p></div>
+<div class="qa"><div class="q">How is this the same as my bandit's Q += (r − Q)/N?</div><p>It is the same incremental mean. In the bandit each "game" was one pull; here each (state, action) collects the returns G of the games that passed through it.</p></div>
+<div class="qa"><div class="q">Why do we still need exploration?</div><p>If the agent never tries "hit on 13 vs dealer 2", it never gets a return for it and never learns its value. With ε = 0.01, 10 states never tried one action.</p></div>
+<div class="qa"><div class="q">First-visit or every-visit: which is right?</div><p>Both converge to the true value. First-visit uses only the first time a state appears in a game; every-visit uses all of them. In Blackjack a state can't repeat (your sum only goes up, or the ace changes), so they're identical there.</p></div>
+<div class="qa"><div class="q">Is Monte Carlo slower than TD?</div><p>Often, but not always. On Blackjack (1–3 moves per game) they're similar. On long games TD usually wins because its targets are less noisy (chapter 11).</p></div>
+<div class="qa"><div class="q">What does "unbiased" mean here?</div><p>On average, the MC target equals the true value (0.502 vs 0.5). TD targets can be systematically off while the guesses are still wrong.</p></div>
+<div class="qa"><div class="q">Can Monte Carlo work if the game never ends?</div><p>No. G is the total until the end. For never-ending tasks, use TD.</p></div>
+<div class="qa"><div class="q">Why is the importance ratio 4 in game 1?</div><p>Two moves, each with π/b = 1/0.5 = 2. 2 × 2 = 4. A random player follows my policy twice in a row only 1 time in 4, so when it does, that game stands in for four.</p></div>
+<div class="qa"><div class="q">Does the learned policy beat the casino?</div><p>No. Best learned average −0.040 per game: you still lose 4 paise per rupee bet on average. RL finds the best way to play; it can't change the game's odds.</p></div>
+<div class="qa"><div class="q">Why do some learned chart cells look "wrong" compared to the textbook?</div><p>Near-ties. For (sum 12, dealer 2) Q(stick) = −0.300 vs Q(hit) = −0.301: a coin flip of noise decides the letter. More games shrink the noise.</p></div>
+
+<!-- ═══════════════════ 16 PRACTICE ═══════════════════ -->
+<h2><span class="n">16</span>Practice problems</h2>
+<p class="sub">Answers in chapter 18.</p>
+<ol>
+<li><b>Returns.</b> A game gives rewards 0, 0, 5 (γ = 0.9). Compute G at each of the three steps by walking backwards.</li>
+<li><b>Incremental mean.</b> V(s) = 0.2 after N = 4 visits. A new game gives G = −1. Compute the new V with the 1/N rule.</li>
+<li><b>Constant α.</b> Same as 2, but use α = 0.1 instead of 1/N. Which update reacts more?</li>
+<li><b>First vs every visit.</b> A game visits X (r = 2), Y (r = 0), X (r = 1), then ends; γ = 1. Give the first-visit and every-visit samples for V(X).</li>
+<li><b>MC vs TD.</b> Game: P --(r=1)--> Q --(r=0)--> END. γ = 1, α = 0.5, V(P) = 0, V(Q) = 4. Give the MC update and the TD(0) updates for both states.</li>
+<li><b>Importance ratio.</b> Behaviour policy: 3 actions, uniform. Target policy: deterministic. A game has 3 moves, all matching the target. What is ρ? What if the second move doesn't match?</li>
+<li><b>Weighted IS.</b> Three random games: (ρ = 4, G = −1), (ρ = 0, G = +1), (ρ = 2, G = +1). Compute ordinary and weighted estimates.</li>
+<li><b>Conceptual.</b> Why might MC beat TD when your state description leaves out important information (e.g. the card count in Blackjack)?</li>
+<li><b>Conceptual.</b> A robot vacuum cleans until its battery dies (one episode is about 2 hours, 7,000 steps). MC or TD? Why?</li>
+<li><b>Coding.</b> In <code>blackjack_control.py</code>, change ε to 0.05 and train for 200,000 games. Predict: will the test average be better or worse than ε = 0.1? Then run it.</li>
+<li><b>Coding.</b> Add "stick on 18+" to the test table in <code>blackjack_control.py</code>. Where will it rank?</li>
+</ol>
+
+<!-- ═══════════════════ 17 RUN + CHEAT ═══════════════════ -->
+<h2><span class="n">17</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\02_monte_carlo
+python blackjack_prediction.py   <span class="c"># value of "stick on 20+", heatmaps            (~40 s)</span>
+python blackjack_control.py      <span class="c"># learn to play: MC control, stick/hit chart   (~3 min)</span>
+python mc_vs_td.py               <span class="c"># one game updated by MC and TD; random walk  (~20 s)</span>
+python off_policy.py             <span class="c"># importance sampling from random games       (~1 min)</span>
+python experiments.py            <span class="c"># games, ε, exploring starts, Q-learning      (~4 min)</span>
+<span class="c"># add --no-show to save the charts without opening windows</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">Monte Carlo control</span>
+<pre style="background:#fff;margin:6px 0">Q = 0, N = 0 for every (s, a)
+for each game:
+  play the WHOLE game with ε-greedy(Q),
+    recording (s, a, r) at each step
+  G = 0
+  walk the steps BACKWARDS:
+    G = r + γ·G
+    (first visit of (s,a)?)
+    N[s,a] += 1
+    Q[s,a] += (G − Q[s,a]) / N[s,a]</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">Key formulas</span>
+<pre style="background:#fff;margin:6px 0">Return:   G_t = r_t+1 + γ·G_t+1
+Average:  Q += (G − Q) / N
+TD(0):    V += α(r + γV(s′) − V)
+Ratio:    ρ = Π π(a|s) / b(a|s)
+Ord. IS:  V = Σρ·G / n
+Wtd. IS:  V = Σρ·G / Σρ</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>Monte Carlo plays the whole game, then walks backwards giving every visited (state, action) the real return G.</li>
+<li>Its value is just an average of returns, the same incremental mean as your bandit.</li>
+<li>No guesses means no bias, but one game's luck makes the target noisy; TD trades a little bias for much less noise.</li>
+<li>Learning from someone else's games needs importance-sampling weights ρ = Π π/b.</li>
+</ol>
+</div>
+
+<!-- ═══════════════════ 18 ANSWERS ═══════════════════ -->
+<h2><span class="n">18</span>Answers to the practice problems</h2>
+<ol>
+<li>Backwards: step 3: G = 5. Step 2: G = 0 + 0.9 × 5 = <b>4.5</b>. Step 1: G = 0 + 0.9 × 4.5 = <b>4.05</b>.</li>
+<li>N becomes 5: V = 0.2 + (−1 − 0.2)/5 = 0.2 − 0.24 = <b>−0.04</b>.</li>
+<li>V = 0.2 + 0.1 × (−1.2) = <b>0.08</b>. Here 1/N = 0.2 > α = 0.1, so the 1/N rule reacts more. Later, when N is large, constant α reacts more (and keeps adapting if the world changes).</li>
+<li>Returns: from the first X: 2 + 0 + 1 = 3; from Y: 1; from the second X: 1. First-visit sample for V(X): <b>3</b>. Every-visit samples: <b>3 and 1</b> (average 2).</li>
+<li>MC: G(Q) = 0 → V(Q) = 4 + 0.5 × (0 − 4) = <b>2</b>; G(P) = 1 + 0 = 1 → V(P) = 0 + 0.5 × 1 = <b>0.5</b>. TD: P: target = 1 + V(Q) = 5 → V(P) = <b>2.5</b>; Q: target = 0 (end) → V(Q) = <b>2</b>. TD made P optimistic because Q's old guess (4) was too high: that's bias.</li>
+<li>Each matching move: 1 / (1/3) = 3. ρ = 3 × 3 × 3 = <b>27</b>. If the second move doesn't match, π = 0 there, so ρ = <b>0</b>.</li>
+<li>Σρ·G = 4·(−1) + 0 + 2·(+1) = −2. Ordinary: −2 / 3 = <b>−0.667</b>. Weighted: −2 / (4 + 0 + 2) = <b>−0.333</b>.</li>
+<li>TD's target trusts V(s′), and if the state hides important information, V(s′) mixes up different situations and is systematically wrong. MC uses the real final result, which already "knows" what happened.</li>
+<li><b>TD.</b> 7,000 steps per episode means MC learns nothing for 2 hours and then gets one very noisy return. TD learns after every step.</li>
+<li>A reasonable prediction: slightly worse or about the same. Less exploration means fewer tries of rarely chosen actions (experiment B: ε = 0.01 left 10 states untested), but the training games are closer to greedy. Run it to check.</li>
+<li>Prediction: between "stick on 17+" (−0.076) and "stick on 20+" (−0.347). Sticking on 18 is too cautious against strong dealer cards, but much better than waiting for 20.</li>
+</ol>

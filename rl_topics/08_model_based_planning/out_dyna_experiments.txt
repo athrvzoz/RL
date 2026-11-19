@@ -1,0 +1,42 @@
+==========================================================================
+EXPERIMENT 1 · How many planning steps? (20 runs x 50 games each)
+==========================================================================
+      n   real steps (50 games)   first game < 20 steps   Q-updates   time per run
+      0          4,936            game 28                 4,936     0.05 s
+      1          2,788            game 13                 5,576     0.04 s
+      2          2,072            game 9                  6,217     0.04 s
+      5          1,672            game 6                 10,034     0.06 s
+     10          2,012            game 5                 22,135     0.13 s
+     20          1,821            game 4                 38,237     0.21 s
+     50          1,458            game 3                 74,373     0.46 s
+    100          1,659            game 3                167,589     1.20 s
+
+==========================================================================
+EXPERIMENT 2 · The world changes (n = 50, alpha 0.5, 5 runs, kappa = 0.001 for Dyna-Q+)
+==========================================================================
+
+  blocking maze: the wall changes after step 1000
+     before:                after:
+     . . . . . . . . G      . . . . . . . . G
+     . . . . . . . . .      . . . . . . . . .
+     . . . . . . . . .      . . . . . . . . .
+     # # # # # # # # .      . # # # # # # # #
+     . . . . . . . . .      . . . . . . . . .
+     . . . S . . . . .      . . . S . . . . .
+     shortest path before: 10 steps, after: 16 steps
+     Dyna-Q : goals reached before the change   57.8, after    0.2   (in the last 1000 steps:   0.0)   1.2 s/run
+     Dyna-Q+: goals reached before the change   67.2, after   86.4   (in the last 1000 steps:  50.4)   1.2 s/run
+
+  shortcut maze: the wall changes after step 3000
+     before:                after:
+     . . . . . . . . G      . . . . . . . . G
+     . . . . . . . . .      . . . . . . . . .
+     . . . . . . . . .      . . . . . . . . .
+     . # # # # # # # #      . # # # # # # # .
+     . . . . . . . . .      . . . . . . . . .
+     . . . S . . . . .      . . . S . . . . .
+     shortest path before: 16 steps, after: 10 steps
+     Dyna-Q : goals reached before the change  126.4, after  165.4   (in the last 1000 steps:  55.4)   2.6 s/run
+     Dyna-Q+: goals reached before the change  122.8, after  232.2   (in the last 1000 steps:  79.0)   2.7 s/run
+
+Chart saved to dyna_experiments.png

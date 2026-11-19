@@ -1,0 +1,34 @@
+
+τ = 0.05: 10,000 steps
+    step  1,000   test score  -1046.6   critic thinks start is worth     0.1, really  -454.6   (   0s)
+    step  2,000   test score   -921.5   critic thinks start is worth  -140.5, really  -389.0   (   3s)
+    step  3,000   test score    -98.7   critic thinks start is worth  -144.2, really   -88.6   (   6s)
+    step  4,000   test score    -97.1   critic thinks start is worth   -52.5, really   -87.9   (   9s)
+    step  5,000   test score    -96.5   critic thinks start is worth   -27.1, really   -87.5   (  13s)
+    step  6,000   test score    -96.4   critic thinks start is worth   -31.6, really   -87.6   (  16s)
+    step  7,000   test score    -97.1   critic thinks start is worth   -39.0, really   -87.7   (  20s)
+    step  8,000   test score    -97.3   critic thinks start is worth   -49.2, really   -87.6   (  24s)
+    step  9,000   test score    -97.6   critic thinks start is worth   -55.9, really   -87.7   (  28s)
+    step 10,000   test score    -97.9   critic thinks start is worth   -67.0, really   -87.7   (  32s)
+
+τ = 1 (no target net): 10,000 steps
+    step  1,000   test score  -1046.6   critic thinks start is worth     0.1, really  -454.6   (   0s)
+    step  2,000   test score  -1203.2   critic thinks start is worth  -494.1, really  -503.2   (   4s)
+    step  3,000   test score  -1392.6   critic thinks start is worth  -236.0, really  -560.0   (   8s)
+    step  4,000   test score  -1023.1   critic thinks start is worth  -261.3, really  -425.5   (  12s)
+    step  5,000   test score  -1076.5   critic thinks start is worth  -308.4, really  -442.9   (  16s)
+    step  6,000   test score  -1041.8   critic thinks start is worth  -372.5, really  -435.1   (  21s)
+    step  7,000   test score  -1137.3   critic thinks start is worth  -344.3, really  -478.0   (  25s)
+    step  8,000   test score  -1127.1   critic thinks start is worth  -368.2, really  -469.8   (  29s)
+    step  9,000   test score  -1265.6   critic thinks start is worth  -306.0, really  -515.2   (  33s)
+    step 10,000   test score   -940.8   critic thinks start is worth  -407.3, really  -402.9   (  38s)
+
+========================================================================
+PART 'tau': test score (avg of 5 games) at each 1,000 steps
+========================================================================
+  τ = 0.005 (normal)        -1047  -1405   -666   -128   -100    -98    -97    -98    -97    -96
+  τ = 0.05                  -1047   -922    -99    -97    -97    -96    -97    -97    -98    -98
+  τ = 1 (no target net)     -1047  -1203  -1393  -1023  -1076  -1042  -1137  -1127  -1266   -941
+                               1k     2k     3k     4k     5k     6k     7k     8k     9k    10k
+
+Saved knobs_tau.png and knobs_tau.json

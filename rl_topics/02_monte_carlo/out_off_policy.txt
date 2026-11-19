@@ -1,0 +1,18 @@
+'True' value by playing stick-on-20 itself 100,000 times: V = -0.281
+(Sutton & Barto report -0.27726 for this state.)
+
+Five games played by the RANDOM player, and how much each one counts:
+  game 1: 13:hit, 13:hit                     result G = -1   ratio ρ = 4
+  game 2: 13:hit, 15:stick                   result G = -1   ratio ρ = 0
+  game 3: 13:stick                           result G = +1   ratio ρ = 0
+  game 4: 13:stick                           result G = +1   ratio ρ = 0
+  game 5: 13:stick                           result G = -1   ratio ρ = 0
+
+Error (mean squared, 100 runs) after N random games:
+       N   ordinary IS   weighted IS
+      10         1.209         0.540
+     100         0.107         0.108
+    1000         0.014         0.015
+  Average estimate after 1000 games: ordinary -0.259, weighted -0.261
+
+Chart saved to off_policy.png

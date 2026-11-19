@@ -1,0 +1,6 @@
+  random torques   avg over 100 games  -1190.5
+  DDPG             avg over 100 games   -140.4
+  TD3              avg over 100 games   -142.0
+  SAC              avg over 100 games   -138.5
+  (0 would be perfect: upright from the first step with no torque. Starting hanging
+   down costs about −350 to swing up, so the average depends on where games start.)

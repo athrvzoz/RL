@@ -1,0 +1,51 @@
+======================================================================
+DPO, beta = 0.1, 600 passes over 2400 preference pairs
+======================================================================
+  pass    0: loss 0.6931  held-out acc 50.0%  RM -0.58  TRUE +0.45  KL 0.00  len 3.67
+  pass  100: loss 0.6859  held-out acc 75.1%  RM -0.40  TRUE +1.01  KL 0.03  len 3.45
+  pass  200: loss 0.6792  held-out acc 74.4%  RM -0.28  TRUE +1.21  KL 0.06  len 3.10
+  pass  300: loss 0.6730  held-out acc 74.1%  RM -0.20  TRUE +1.54  KL 0.14  len 3.11
+  pass  400: loss 0.6671  held-out acc 73.9%  RM -0.10  TRUE +1.88  KL 0.25  len 2.89
+  pass  500: loss 0.6614  held-out acc 73.4%  RM -0.00  TRUE +2.06  KL 0.32  len 2.75
+  pass  600: loss 0.6560  held-out acc 73.1%  RM +0.10  TRUE +2.29  KL 0.45  len 2.63
+  sample replies: hi please reset refund  |  sorry refund  |  reset sorry tracking refund tracking reset link reset
+======================================================================
+DPO, beta = 0.3, 600 passes over 2400 preference pairs
+======================================================================
+  pass    0: loss 0.6931  held-out acc 50.0%  RM -0.58  TRUE +0.45  KL 0.00  len 3.67
+  pass  100: loss 0.6401  held-out acc 74.6%  RM -0.22  TRUE +1.47  KL 0.13  len 3.18
+  pass  200: loss 0.6048  held-out acc 73.9%  RM +0.00  TRUE +2.00  KL 0.30  len 2.72
+  pass  300: loss 0.5782  held-out acc 73.1%  RM +0.16  TRUE +2.53  KL 0.53  len 2.52
+  pass  400: loss 0.5572  held-out acc 73.1%  RM +0.28  TRUE +2.80  KL 0.73  len 2.32
+  pass  500: loss 0.5400  held-out acc 73.2%  RM +0.30  TRUE +2.89  KL 0.82  len 2.31
+  pass  600: loss 0.5259  held-out acc 73.6%  RM +0.38  TRUE +3.07  KL 0.94  len 2.24
+  sample replies: hi tracking link  |  sorry refund  |  reset link
+======================================================================
+DPO, beta = 1.0, 600 passes over 2400 preference pairs
+======================================================================
+  pass    0: loss 0.6931  held-out acc 50.0%  RM -0.58  TRUE +0.45  KL 0.00  len 3.67
+  pass  100: loss 0.4862  held-out acc 75.8%  RM -0.03  TRUE +1.95  KL 0.23  len 2.93
+  pass  200: loss 0.4438  held-out acc 76.9%  RM +0.06  TRUE +2.18  KL 0.31  len 2.65
+  pass  300: loss 0.4235  held-out acc 78.1%  RM +0.12  TRUE +2.49  KL 0.43  len 2.61
+  pass  400: loss 0.4114  held-out acc 78.2%  RM +0.15  TRUE +2.42  KL 0.44  len 2.48
+  pass  500: loss 0.4035  held-out acc 78.1%  RM +0.20  TRUE +2.54  KL 0.49  len 2.55
+  pass  600: loss 0.3979  held-out acc 78.6%  RM +0.18  TRUE +2.54  KL 0.51  len 2.57
+  sample replies: hi please reset reset hi tracking link  |  sorry  |  reset link
+
+======================================================================
+COMPARISON (6,000 fresh replies each, seed-0 models)
+======================================================================
+  model                 RM score    TRUE     KL  length  repeats
+  SFT (pi_ref)             -0.59   +0.47   0.00    3.68     0.69
+  RLHF PPO, β=0            +2.57   -6.99  14.88    8.00     5.99
+  RLHF PPO, β=0.3          +0.65   +1.94   1.33    2.89     0.80
+  DPO, β=0.1               +0.09   +2.29   0.44    2.67     0.28
+  DPO, β=0.3               +0.35   +3.01   0.92    2.27     0.13
+  DPO, β=1                 +0.18   +2.52   0.47    2.53     0.22
+
+  Reward model's held-out accuracy (from reward_model.py) vs DPO's built-in judge:
+     DPO β=0.1: 73.1%
+     DPO β=0.3: 73.6%
+     DPO β=1: 78.6%
+
+  Chart saved to dpo_vs_rlhf.png

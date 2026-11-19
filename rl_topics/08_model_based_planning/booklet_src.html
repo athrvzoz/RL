@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model-Based RL and Planning</title>
+<!--STYLE-->
+<style>
+table.gw.ttt td{width:30px;height:30px;font-size:12pt;font-family:var(--f-body);font-weight:700}
+table.gw.ttt td.x{color:#2C4BD1} table.gw.ttt td.o{color:#C2413A}
+table.gw.ttt td.hl{background:#FFF0C2}
+</style>
+</head>
+<body>
+<main>
+
+<!-- ═══════════ COVER ═══════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Booklet 08</div>
+  <h1>Model-Based RL<br>and Planning</h1>
+  <p class="lede">Dyna-Q, Monte Carlo Tree Search, and the idea behind AlphaZero. Instead of only learning from real moves, the agent builds or uses a model of the world and <b>imagines</b> moves in its head. Every number comes from code in <code>rl_topics/08_model_based_planning</code>.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture</div>
+    <div><span>02</span>Words you need</div>
+    <div><span>03</span>Intuition: rehearse, and think ahead</div>
+    <div><span>04</span>Dyna-Q: the maths and a hand trace</div>
+    <div><span>05</span>Dyna-Q: the algorithm and code</div>
+    <div><span>06</span>Dyna-Q: running it</div>
+    <div><span>07</span>Planning at decision time: game trees</div>
+    <div><span>08</span>MCTS: four steps and UCB by hand</div>
+    <div><span>09</span>MCTS: the code</div>
+    <div><span>10</span>MCTS: running it</div>
+    <div><span>11</span>MCTS: experiments</div>
+    <div><span>12</span>The AlphaZero idea</div>
+    <div><span>13</span>Real-world problems</div>
+    <div><span>14</span>Side by side</div>
+    <div><span>15</span>Clearing up the confusions</div>
+    <div><span>16</span>Practice problems</div>
+    <div><span>17</span>Run it yourself + cheat sheet</div>
+    <div><span>18</span>Answers</div>
+  </div>
+</section>
+
+<!-- ═══════════ 01 ═══════════ -->
+<h2><span class="n">01</span>The big picture</h2>
+<p class="sub">You know the two ends. This booklet fills the middle.</p>
+
+<figure>
+<svg viewBox="0 0 760 190" role="img" aria-label="Spectrum from model-free to learned model to given model">
+  <defs><marker id="f1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <line x1="30" y1="30" x2="730" y2="30" class="ln" marker-end="url(#f1)" marker-start="url(#f1)"/>
+  <text x="30" y="20" class="t-m">no model: learn only from real moves</text><text x="730" y="20" text-anchor="end" class="t-m">full model: plan without playing</text>
+  <rect x="20" y="50" width="220" height="120" rx="6" class="bx"/>
+  <text x="130" y="74" text-anchor="middle" font-weight="700">Q-learning, DQN, PPO</text>
+  <text x="130" y="96" text-anchor="middle" class="t-m">each real move used</text><text x="130" y="114" text-anchor="middle" class="t-m">once (or replayed)</text>
+  <text x="130" y="140" text-anchor="middle" class="t-m">FrozenLake: 2,000 games</text>
+  <rect x="270" y="50" width="220" height="120" rx="6" class="bxa"/>
+  <text x="380" y="74" text-anchor="middle" font-weight="700">Dyna-Q (learned model)</text>
+  <text x="380" y="96" text-anchor="middle">write a notebook of what</text><text x="380" y="114" text-anchor="middle">happened; rehearse from it</text>
+  <text x="380" y="140" text-anchor="middle" class="t-a">this booklet, part 1</text>
+  <rect x="520" y="50" width="220" height="120" rx="6" class="bxg"/>
+  <text x="630" y="74" text-anchor="middle" font-weight="700">Value iteration, MCTS</text>
+  <text x="630" y="96" text-anchor="middle">rules are known: imagine</text><text x="630" y="114" text-anchor="middle">futures before moving</text>
+  <text x="630" y="140" text-anchor="middle" class="t-a">MCTS: this booklet, part 2</text>
+</svg>
+<figcaption>Remember your Google Maps analogy: value iteration had the map; Q-learning explored a city without one. Dyna draws its own map while exploring. MCTS uses the map to look ahead before each turn.</figcaption>
+</figure>
+
+<p>Two ways to use a model:</p>
+<ul>
+<li><b>Background planning (Dyna-Q):</b> between real moves, replay imagined moves from your notebook to improve the Q-table faster. One real step becomes 1 + n learning updates.</li>
+<li><b>Decision-time planning (MCTS):</b> before each move, imagine thousands of possible futures from the current position, then pick the move that came out best. This is how AlphaGo and AlphaZero chose moves.</li>
+</ul>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p><b>Model-based RL</b> gets more out of each real experience by thinking: Dyna-Q learns a model from experience and rehearses imagined steps from it; MCTS uses a model (the game's rules) to search ahead with simulations, guided by the same UCB formula you used for bandits.</p>
+</div>
+
+<!-- ═══════════ 02 ═══════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<table class="long">
+<tr><th style="width:24%">Term</th><th>Meaning in plain words</th><th style="width:27%">In your code</th></tr>
+<tr><td><b>Model</b></td><td>Anything that predicts "if I do a in s, what reward and next state do I get?"</td><td><code>model[(s, a)]</code>, <code>game.play()</code></td></tr>
+<tr><td><b>Learned model</b></td><td>A model written from experience: a notebook of what happened.</td><td><code>DynaQ.remember()</code></td></tr>
+<tr><td><b>Given model</b></td><td>The rules, known in advance (value iteration's rule book, a board game's rules).</td><td><code>TicTacToe.play()</code></td></tr>
+<tr><td><b>Planning</b></td><td>Improving decisions using imagined experience from a model, without real moves.</td><td><code>plan_once()</code>, <code>search()</code></td></tr>
+<tr><td><b>Direct RL</b></td><td>The normal Q-learning update from a real step.</td><td><code>q_update()</code> in <code>learn()</code></td></tr>
+<tr><td><b>Planning step</b> (n)</td><td>One imagined Q-update from a remembered (s, a). n per real step.</td><td><code>n_planning</code></td></tr>
+<tr><td><b>Dyna-Q+</b></td><td>Dyna with a curiosity bonus for moves not tried for a long time, so it notices when the world changes.</td><td><code>kappa</code></td></tr>
+<tr><td><b>Game tree</b></td><td>All possible continuations from a position: each node a position, each edge a move.</td><td><code>Node</code></td></tr>
+<tr><td><b>Minimax</b></td><td>Exact search: assume both players play perfectly; best value for me, worst for me from the opponent.</td><td><code>minimax_value()</code></td></tr>
+<tr><td><b>MCTS</b></td><td>Monte Carlo Tree Search: grow the tree selectively, scoring leaves with random playouts.</td><td><code>search()</code></td></tr>
+<tr><td><b>Simulation / rollout</b></td><td>One imagined game, played with random moves to the end.</td><td><code>rollout()</code></td></tr>
+<tr><td><b>N, W</b></td><td>Visit count and total wins of a node (a draw counts 0.5).</td><td><code>node.N</code>, <code>node.W</code></td></tr>
+<tr><td><b>UCB / UCT</b></td><td>W/N + c·√(ln N<sub>parent</sub> / N): average result + exploration bonus. Your bandit formula, used on tree nodes.</td><td><code>ucb_score()</code></td></tr>
+<tr><td><b>Backpropagation</b> (in MCTS)</td><td>Adding a simulation's result to every node on the path back to the root. (Not the same as neural-network backprop!)</td><td>step 4 of <code>search()</code></td></tr>
+<tr><td><b>Prior</b> P</td><td>A network's (or hint's) first guess of how good each move is, before searching.</td><td><code>prior_fn</code></td></tr>
+<tr><td><b>PUCT</b></td><td>AlphaZero's selection rule: Q + c·P·√N<sub>parent</sub> / (1 + N).</td><td><code>puct_search()</code></td></tr>
+<tr><td><b>Self-play</b></td><td>The agent plays against itself to create its own training data.</td><td>(explained, chapter 12)</td></tr>
+</table>
+
+<!-- ═══════════ 03 ═══════════ -->
+<h2><span class="n">03</span>Intuition: rehearse, and think ahead</h2>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">Dyna: rehearsing from your notebook</span>
+<p>A student walks once from the school gate to the exam hall and writes down every turn. That night, without walking again, they rehearse the route in their head 50 times: "gate → left → stairs → hall". Next morning they walk it perfectly. One real walk, many mental replays.</p></div>
+<div class="box ok" style="margin:0"><span class="tag">MCTS: thinking before you move</span>
+<p>A chess player doesn't just play the move that "feels" best. They imagine: "if I play here, they'll probably reply there, then I…". They spend more thought on promising lines and little on silly ones, then play the move that held up best.</p></div>
+</div>
+
+<h3>Why Q-learning needed so many games</h3>
+<p>In FrozenLake you measured it: the goal's value reached the start square only in <b>game 70</b>, one square further back per game that happened to pass through. Each real step taught exactly one Q-entry, once. Dyna's answer: keep every real step in a notebook and re-learn from it many times. The value ripple that took 70 real games can happen in your head.</p>
+
+<div class="box warn"><span class="tag">The catch</span>
+<p>Planning is only as good as the model. If the notebook is wrong (the world changed, or you remembered badly), you rehearse the wrong route very confidently. Chapter 06 shows exactly this happening, and a fix.</p>
+</div>
+
+<!-- ═══════════ 04 ═══════════ -->
+<h2><span class="n">04</span>Dyna-Q: the maths and a hand trace</h2>
+<p class="sub">No new maths: the same Q-learning update, applied to imagined steps too.</p>
+
+<pre style="font-size:9.6pt">
+REAL step (s, a, r, s′):
+  (a) direct RL:     Q(s,a) ← Q(s,a) + α·[ r + γ·max Q(s′,·) − Q(s,a) ]
+  (b) model update:  model(s,a) ← (r, s′)                    "write it in the notebook"
+  (c) planning, n times:
+        pick a remembered (ŝ, â) at random
+        (r̂, ŝ′) = model(ŝ, â)                                 "read the notebook"
+        Q(ŝ,â) ← Q(ŝ,â) + α·[ r̂ + γ·max Q(ŝ′,·) − Q(ŝ,â) ]       same update, no real move
+</pre>
+
+<h3>Hand trace (real output of <code>dyna_maze.py</code> part 1)</h3>
+<p>A corridor S(0) → 1 → 2 → G(3). Reward 1 only for reaching G. α = 0.5, γ = 0.9.</p>
+<pre>
+Game 1 (no planning yet): walk right, right, right
+  real  0 →right→ 1  r=0   Q[0,right] = 0.0000
+  real  1 →right→ 2  r=0   Q[1,right] = 0.0000
+  real  2 →right→ 3  r=1   Q[2,right] = 0.5000
+  Notebook: (0,right)→(r 0, 1)   (1,right)→(r 0, 2)   (2,right)→(r 1, 3)
+
+Game 2, first real step, now WITH n = 2 planning steps:
+  REAL   0 →right→ 1   target = 0 + 0.9 × max Q[1] = 0.9 × 0.0000 = 0.0000    Q[0,right]: 0 → 0
+  PLAN 1 picked (1,right) → notebook says (0, 2)
+                       target = 0 + 0.9 × 0.5000 = 0.4500         Q[1,right]: 0 → 0.2250
+  PLAN 2 picked (0,right) → notebook says (0, 1)
+                       target = 0 + 0.9 × 0.2250 = 0.2025         Q[0,right]: 0 → 0.1013
+</pre>
+<div class="box key"><span class="tag">What just happened</span>
+<p>After <b>one real step</b> of game 2, the start square already "knows" the way (Q[0, right] = 0.1013). Plain Q-learning (n = 0) first gives the start a value in <b>game 3</b>. The goal's news travelled backwards through the notebook, not through the legs. That's the FrozenLake ripple, sped up by thinking.</p>
+</div>
+
+<!-- ═══════════ 05 ═══════════ -->
+<h2><span class="n">05</span>Dyna-Q: the algorithm and code</h2>
+<figure>
+<svg viewBox="0 0 760 200" role="img" aria-label="Dyna loop: real step, direct RL, model learning, planning loop">
+  <defs><marker id="f5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="160" height="60" rx="5" class="bx"/><text x="100" y="44" text-anchor="middle" font-weight="700">REAL WORLD</text><text x="100" y="64" text-anchor="middle" class="t-m">one real step</text>
+  <line x1="180" y1="50" x2="268" y2="50" class="ln" marker-end="url(#f5)"/><text x="224" y="42" text-anchor="middle" class="t-m">s, a, r, s′</text>
+  <rect x="270" y="20" width="200" height="60" rx="5" class="bxg"/><text x="370" y="44" text-anchor="middle" font-weight="700">Q-TABLE</text><text x="370" y="64" text-anchor="middle" class="t-m">(a) direct RL update</text>
+  <path d="M224,52 V140 H268" class="ln" marker-end="url(#f5)"/>
+  <rect x="270" y="110" width="200" height="60" rx="5" class="bxa"/><text x="370" y="134" text-anchor="middle" font-weight="700">NOTEBOOK (model)</text><text x="370" y="154" text-anchor="middle" class="t-m">(b) remember (s,a) → (r,s′)</text>
+  <path d="M470,140 H560 V50 H472" class="lna" marker-end="url(#f5)"/>
+  <text x="640" y="88" text-anchor="middle" class="t-a">(c) n imagined</text><text x="640" y="106" text-anchor="middle" class="t-a">updates</text>
+  <path d="M370,20 V8 H100 V18" class="ln" marker-end="url(#f5)"/><text x="235" y="5" text-anchor="middle" class="t-m" font-size="11">ε-greedy chooses the next real action</text>
+</svg>
+<figcaption>Every real step feeds both the Q-table and the notebook; the notebook then feeds the Q-table n more times.</figcaption>
+</figure>
+
+<h3>The code: <code>dyna_q.py</code></h3>
+<pre><span class="k">def</span> q_update(self, s, a, r, s2, done):
+    old = self.Q[s, a]
+    target = r + self.gamma * np.max(self.Q[s2]) * (<span class="k">not</span> done)   <span class="c"># your project-3 line</span>
+    self.Q[s, a] = old + self.alpha * (target - old)
+
+<span class="k">def</span> plan_once(self):
+    s, a = self.seen[self.rng.integers(len(self.seen))]   <span class="c"># a (s, a) we REALLY tried before</span>
+    r, s2, done = self.model[(s, a)]                      <span class="c"># ask the notebook (no real move!)</span>
+    <span class="k">if</span> self.kappa &gt; 0:                                     <span class="c"># Dyna-Q+: "not checked lately" bonus</span>
+        r += self.kappa * math.sqrt(self.t - self.last_tried[(s, a)])
+    <span class="k">return</span> ... self.q_update(s, a, r, s2, done)
+
+<span class="k">def</span> learn(self, s, a, r, s2, done):                      <span class="c"># called once per REAL step</span>
+    self.q_update(s, a, r, s2, done)                      <span class="c"># (a) direct RL</span>
+    self.remember(s, a, r, s2, done)                      <span class="c"># (b) model learning</span>
+    <span class="k">return</span> [self.plan_once() <span class="k">for</span> _ <span class="k">in</span> range(self.n_planning)]   <span class="c"># (c) planning</span></pre>
+<table>
+<tr><th style="width:30%">Line</th><th>Meaning</th></tr>
+<tr><td><code>self.model[(s, a)] = (r, s2, done)</code></td><td>The notebook. The maze is deterministic, so one entry per (s, a) is a perfect model of what's been seen.</td></tr>
+<tr><td><code>self.seen</code></td><td>Planning only replays (s, a) pairs that really happened: the model knows nothing about untried moves.</td></tr>
+<tr><td><code>n_planning = 0</code></td><td>No planning: exactly Q-learning from project 3.</td></tr>
+<tr><td><code>kappa</code> bonus</td><td>Dyna-Q+: imagined reward grows with √(time since last tried), tempting the agent to re-check old moves.</td></tr>
+</table>
+
+<!-- ═══════════ 06 ═══════════ -->
+<h2><span class="n">06</span>Dyna-Q: running it</h2>
+<p class="sub">Real output of <code>dyna_maze.py</code> (30 runs × 50 games) and <code>dyna_experiments.py</code>.</p>
+
+<p>The maze (Sutton &amp; Barto, figure 8.2): 6 × 9 squares, walls, start on the left, goal top-right; reward 1 only at G; shortest path 14 steps. α = 0.1, γ = 0.95, ε = 0.1.</p>
+<table>
+<tr><th>Planning steps n</th><th class="n">game 2</th><th class="n">game 5</th><th class="n">game 10</th><th class="n">first game under 20 steps</th><th class="n">real steps, all 50 games</th><th class="n">time per run</th></tr>
+<tr><td>0 (Q-learning)</td><td class="n">671.7</td><td class="n">241.6</td><td class="n">158.5</td><td class="n">game 30</td><td class="n">5,076</td><td class="n">0.05 s</td></tr>
+<tr><td>5</td><td class="n">152.0</td><td class="n">20.9</td><td class="n">16.6</td><td class="n">game 6</td><td class="n">1,900</td><td class="n">0.12 s</td></tr>
+<tr><td>50</td><td class="n"><b>40.7</b></td><td class="n">17.3</td><td class="n">17.3</td><td class="n"><b>game 3</b></td><td class="n"><b>1,740</b></td><td class="n">1.11 s</td></tr>
+</table>
+<figure><img src="file:///D:/Langchain/rl_topics/08_model_based_planning/dyna_maze_results.png" alt="Dyna maze learning curves and learned arrows"><figcaption>Top: steps per game (game 1, ~900 random steps for everyone, left out). Bottom: what's known after game 1 + 20 steps of game 2. Without planning, 1 square of 46 has a value; with n = 50, 34 of 46 do.</figcaption></figure>
+
+<h3>More planning: fewer real steps, more computing</h3>
+<table>
+<tr><th class="n">n</th><th class="n">0</th><th class="n">1</th><th class="n">2</th><th class="n">5</th><th class="n">10</th><th class="n">20</th><th class="n">50</th><th class="n">100</th></tr>
+<tr><td>real steps (50 games)</td><td class="n">4,936</td><td class="n">2,788</td><td class="n">2,072</td><td class="n">1,672</td><td class="n">2,012</td><td class="n">1,821</td><td class="n">1,458</td><td class="n">1,659</td></tr>
+<tr><td>total Q-updates</td><td class="n">4,936</td><td class="n">5,576</td><td class="n">6,217</td><td class="n">10,034</td><td class="n">22,135</td><td class="n">38,237</td><td class="n">74,373</td><td class="n">167,589</td></tr>
+</table>
+<p>The first few planning steps help enormously (n = 0 → 5 cuts real steps by two-thirds). After that, gains flatten. The remaining real steps come mostly from game 1 (exploring the unknown maze, which no amount of thinking can skip) and from ε's random moves. Thinking is cheap when real steps are expensive (a robot, a patient, money).</p>
+
+<h3>When the model is wrong: the world changes</h3>
+<table>
+<tr><th>Maze</th><th>What changes</th><th class="n">Dyna-Q: goals after the change</th><th class="n">Dyna-Q+: goals after</th></tr>
+<tr><td>Blocking</td><td>after 1,000 steps the short route is <b>blocked</b>; a new path opens on the other side</td><td class="n"><b>0.2</b> (stuck)</td><td class="n"><b>86.4</b></td></tr>
+<tr><td>Shortcut</td><td>after 3,000 steps a <b>shorter</b> route opens</td><td class="n">165.4</td><td class="n"><b>232.2</b></td></tr>
+</table>
+<figure><img src="file:///D:/Langchain/rl_topics/08_model_based_planning/dyna_experiments.png" alt="Planning steps bar chart and changing mazes"><figcaption>Left: real steps vs planning steps. Middle: in the blocking maze Dyna-Q's goal count goes flat forever. Right: in the shortcut maze, Dyna-Q+ finds the new shortcut and pulls ahead.</figcaption></figure>
+<ul>
+<li><b>Blocking:</b> Dyna-Q's notebook says the old route works, so it keeps rehearsing a route that no longer exists. Its ε-exploration is too weak to rediscover the new one.</li>
+<li><b>Shortcut:</b> nothing looks broken, so plain Dyna-Q never goes back to check the old wall. Dyna-Q+'s bonus for "not tried lately" makes it test old moves and find the shortcut.</li>
+</ul>
+
+<!-- ═══════════ 07 ═══════════ -->
+<h2><span class="n">07</span>Planning at decision time: game trees</h2>
+<p class="sub">Real output of <code>tictactoe_mcts.py</code> part 1.</p>
+
+<p>In board games the rules are known: a perfect model. So before each move you can imagine possible futures. All possible continuations form a <b>game tree</b>.</p>
+<pre>
+Tic-tac-toe, full tree: 549,946 positions in the tree, 255,168 different games  (0.5 s to walk it all)
+Perfect play from the empty board (minimax): value 0 (a draw)
+
+Rough size of the tree = (moves per turn) ^ (turns per game):
+   tic-tac-toe  about   4 ^ 9   = 10^5
+   chess        about  35 ^ 80  = 10^124
+   Go (19×19)   about 250 ^ 150 = 10^360
+</pre>
+<p>Tic-tac-toe can be searched completely (minimax: assume both sides play perfectly and back up the values). Chess and Go cannot: there are more positions than atoms in the universe (about 10<sup>80</sup>). We need a <b>selective</b> search: think hard about promising moves, ignore hopeless ones. That's MCTS.</p>
+
+<div class="box plain"><span class="tag">The maths: powers and logarithms</span>
+<p>35<sup>80</sup> = 10<sup>80 × log<sub>10</sub>35</sup> = 10<sup>80 × 1.544</sup> ≈ 10<sup>124</sup>. Every extra move of look-ahead multiplies the work by the number of choices, which is why "just search everything" is hopeless.</p>
+</div>
+
+<!-- ═══════════ 08 ═══════════ -->
+<h2><span class="n">08</span>MCTS: four steps and UCB by hand</h2>
+
+<figure>
+<svg viewBox="0 0 760 180" role="img" aria-label="MCTS four steps: selection, expansion, simulation, backpropagation">
+  <defs><marker id="f8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="15" y="20" width="170" height="80" rx="6" class="bxa"/><text x="100" y="44" text-anchor="middle" font-weight="700">1 · SELECTION</text><text x="100" y="64" text-anchor="middle" class="t-m">walk down the tree,</text><text x="100" y="82" text-anchor="middle" class="t-m">always the best UCB child</text>
+  <line x1="185" y1="60" x2="203" y2="60" class="ln" marker-end="url(#f8)"/>
+  <rect x="205" y="20" width="170" height="80" rx="6" class="bx"/><text x="290" y="44" text-anchor="middle" font-weight="700">2 · EXPANSION</text><text x="290" y="64" text-anchor="middle" class="t-m">add ONE new child</text><text x="290" y="82" text-anchor="middle" class="t-m">(an untried move)</text>
+  <line x1="375" y1="60" x2="393" y2="60" class="ln" marker-end="url(#f8)"/>
+  <rect x="395" y="20" width="170" height="80" rx="6" class="bx"/><text x="480" y="44" text-anchor="middle" font-weight="700">3 · SIMULATION</text><text x="480" y="64" text-anchor="middle" class="t-m">random moves to the</text><text x="480" y="82" text-anchor="middle" class="t-m">end: win / draw / loss</text>
+  <line x1="565" y1="60" x2="583" y2="60" class="ln" marker-end="url(#f8)"/>
+  <rect x="585" y="20" width="160" height="80" rx="6" class="bxg"/><text x="665" y="44" text-anchor="middle" font-weight="700">4 · BACKUP</text><text x="665" y="64" text-anchor="middle" class="t-m">N += 1, W += result</text><text x="665" y="82" text-anchor="middle" class="t-m">on every node of the path</text>
+  <path d="M665,100 V140 H100 V102" class="ln" marker-end="url(#f8)"/><text x="382" y="160" text-anchor="middle" class="t-m">repeat for as many simulations as you can afford, then play the MOST VISITED move</text>
+</svg>
+<figcaption>One "simulation" = these four steps once. The tree grows by one node per simulation, mostly along promising lines.</figcaption>
+</figure>
+
+<h3>The selection rule is your bandit's UCB</h3>
+<pre style="font-size:9.6pt">
+UCB(child) =   W / N         +   c · √( ln N<sub>parent</sub> / N )                 c = 1.4
+               ▲ average result      ▲ bonus: big when this child was rarely tried
+</pre>
+<p>In project 1 each slot-machine arm was a "child"; here each legal move is. Exploit what has worked, and keep testing what hasn't been tried much.</p>
+
+<h3>A search you can check by hand (12 simulations)</h3>
+<div class="two">
+<div>
+<table class="gw ttt">
+<tr><td class="x">X</td><td class="o">O</td><td class="x">X</td></tr>
+<tr><td class="o">O</td><td class="o">O</td><td class="x">X</td></tr>
+<tr><td>6</td><td>7</td><td class="hl">8</td></tr>
+</table>
+<p style="font-size:9pt;color:var(--muted);margin-top:4px">X to move; empty squares 6, 7, 8. X wins at once with 8 (right column). O threatens to win at 7 (middle column).</p>
+</div>
+<div>
+<pre>
+sim  1: path 6       rollout ends: O
+sim  2: path 8       rollout ends: X
+sim  3: path 7       rollout ends: draw
+sim  4: path 8       rollout ends: X
+ …
+sim 12: path 7-8-6   rollout ends: draw
+</pre>
+</div>
+</div>
+<p>After the search (W counts wins for X, a draw = 0.5):</p>
+<table>
+<tr><th>Move</th><th class="n">N</th><th class="n">W</th><th class="n">W/N</th><th class="n">UCB for the next pick</th></tr>
+<tr><td>6</td><td class="n">2</td><td class="n">0.0</td><td class="n">0.000</td><td class="n">0 + 1.4·√(ln 12 / 2) = <b>1.561</b></td></tr>
+<tr><td>7</td><td class="n">4</td><td class="n">2.5</td><td class="n">0.625</td><td class="n">0.625 + 1.4·√(ln 12 / 4) = <b>1.728</b></td></tr>
+<tr><td>8</td><td class="n">6</td><td class="n">6.0</td><td class="n">1.000</td><td class="n">1.0 + 1.4·√(ln 12 / 6) = <b>1.901</b></td></tr>
+</table>
+<p>Check move 8: ln 12 = 2.485; 2.485/6 = 0.414; √0.414 = 0.644; × 1.4 = 0.901; + 1.0 = <b>1.901</b>. MCTS plays the <b>most visited</b> move: <b>8</b>, the winning move. Even move 6, which lost both its rollouts, keeps a decent UCB (1.561) because it was tried only twice: it still gets a chance.</p>
+
+<!-- ═══════════ 09 ═══════════ -->
+<h2><span class="n">09</span>MCTS: the code</h2>
+<p class="sub"><code>mcts.py</code>: the four steps.</p>
+<pre><span class="k">def</span> ucb_score(child, parent_N, c):
+    exploit = child.W / child.N                                 <span class="c"># average result so far</span>
+    explore = c * math.sqrt(math.log(parent_N) / child.N)       <span class="c"># bonus for "not tried much"</span>
+    <span class="k">return</span> exploit + explore
+
+<span class="k">for</span> _ <span class="k">in</span> range(n_sims):
+    node = root
+    <span class="c"># 1. SELECTION: while every move here has been tried, follow the best UCB child</span>
+    <span class="k">while not</span> node.untried <span class="k">and</span> node.children:
+        node = max(node.children, key=<span class="k">lambda</span> ch: ucb_score(ch, node.N, c))
+    <span class="c"># 2. EXPANSION: add one new child (unless the game is already over here)</span>
+    <span class="k">if</span> node.untried:
+        m = node.untried.pop(rng.randrange(len(node.untried)))
+        child = Node(game, game.play(node.state, m), parent=node, move=m)
+        node.children.append(child); node = child
+    <span class="c"># 3. SIMULATION: random moves to the end of the game</span>
+    result = rollout(game, node.state, rng)
+    <span class="c"># 4. BACKPROPAGATION: update every node on the path back to the root</span>
+    <span class="k">while</span> node <span class="k">is not</span> None:
+        node.N += 1
+        node.W += score_for(node.just_moved, result)
+        node = node.parent</pre>
+<table>
+<tr><th style="width:30%">Line</th><th>Meaning</th></tr>
+<tr><td><code>game.play(state, m)</code></td><td>The <b>model</b>: the rules tell us exactly what the board looks like after a move.</td></tr>
+<tr><td><code>node.just_moved</code></td><td>Each node scores results for the player who moved <i>into</i> it, the one choosing it at the parent. So X picks moves good for X, O picks moves good for O: minimax, approximately.</td></tr>
+<tr><td><code>rollout()</code></td><td>A quick, random "guess" of how good a position is: play randomly to the end. Many noisy guesses average out.</td></tr>
+<tr><td><code>best_move</code> = most visited</td><td>Visits are a steadier vote than win rate: a move tried twice with 2 wins is less trustworthy than one tried 400 times with a 70% rate.</td></tr>
+</table>
+
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>MCTS: running it</h2>
+<p class="sub">Real output of <code>tictactoe_mcts.py</code> parts 3–6.</p>
+
+<h3>Against a random player (100 games each)</h3>
+<table>
+<tr><th>Simulations per move</th><th class="n">as X: win / draw / lose</th><th class="n">as O: win / draw / lose</th><th class="n">time</th></tr>
+<tr><td>(random vs random, 1,000 games)</td><td class="n">55.8 / 14.2 / 30.0 %</td><td class="n">—</td><td class="n"></td></tr>
+<tr><td>1</td><td class="n">58 / 6 / 36</td><td class="n">36 / 8 / 56</td><td class="n">0.0 s</td></tr>
+<tr><td>10</td><td class="n">84 / 7 / 9</td><td class="n">67 / 12 / 21</td><td class="n">0.1 s</td></tr>
+<tr><td>50</td><td class="n">99 / 1 / 0</td><td class="n">77 / 16 / 7</td><td class="n">0.2 s</td></tr>
+<tr><td>1,000</td><td class="n"><b>100 / 0 / 0</b></td><td class="n"><b>92 / 8 / 0</b></td><td class="n">7.5 s</td></tr>
+</table>
+
+<h3>MCTS vs MCTS (50 games each)</h3>
+<pre>
+X = 1000 sims vs O = 1000 sims:  X wins  1, draws 49, O wins 0     (perfect play is a draw!)
+X =   50 sims vs O = 1000 sims:  X wins  0, draws 49, O wins 1
+X = 1000 sims vs O =   50 sims:  X wins 39, draws 11, O wins 0     (more thinking wins)
+</pre>
+
+<h3>Where to play first? (2,000 simulations on the empty board)</h3>
+<div class="two">
+<div>
+<pre>
+Visit counts:          Average result for X:
+  270  103  235          0.693 0.553 0.674
+  191  473  200          0.649 0.749 0.652
+  166  149  213          0.627 0.611 0.662
+</pre>
+</div>
+<div><p>MCTS chooses the <b>centre</b> (473 visits, 24%), then the corners, the classic human advice, discovered from random playouts alone. (The average results are against random-ish play inside the search, so they're above the 0.5 that perfect play would give.)</p></div>
+</div>
+
+<h3>Connect-4 (7 columns × 6 rows, far bigger tree)</h3>
+<pre>
+MCTS as X vs random:  25 sims: win 19/20    100 sims: win 20/20    400 sims: win 20/20
+MCTS 400 (X) vs MCTS 25 (O): X wins 20 of 20        MCTS 25 (X) vs MCTS 400 (O): O wins 18 of 20
+</pre>
+<p>The same code with no changes, just a different <code>game</code> object: MCTS only needs the rules.</p>
+<figure><img src="file:///D:/Langchain/rl_topics/08_model_based_planning/tictactoe_mcts_results.png" alt="MCTS vs random and first-move visits"><figcaption>Left and middle: results vs a random player as X and as O. Right: first-move visit counts (and average results) on the empty board.</figcaption></figure>
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>MCTS: experiments</h2>
+<p class="sub">Real output of <code>mcts_experiments.py</code>, marked against the perfect answer key (minimax) on 150 positions where the choice matters. A random move is perfect 39.0% of the time.</p>
+
+<div class="two">
+<div>
+<table>
+<tr><th>Simulations (c = 1.4)</th><th class="n">% perfect moves</th></tr>
+<tr><td>10</td><td class="n">78.7</td></tr>
+<tr><td>30</td><td class="n">92.0</td></tr>
+<tr><td>100</td><td class="n">98.7</td></tr>
+<tr><td>300</td><td class="n">99.3</td></tr>
+<tr><td>1,000</td><td class="n"><b>100.0</b></td></tr>
+</table>
+</div>
+<div>
+<table>
+<tr><th>Exploration c (100 sims)</th><th class="n">% perfect</th></tr>
+<tr><td>0 (never explore)</td><td class="n"><b>90.0</b></td></tr>
+<tr><td>0.25</td><td class="n">98.0</td></tr>
+<tr><td>0.7</td><td class="n">96.0</td></tr>
+<tr><td>1.4</td><td class="n"><b>98.7</b></td></tr>
+<tr><td>3</td><td class="n">98.0</td></tr>
+<tr><td>10 (explore blindly)</td><td class="n">94.7</td></tr>
+</table>
+</div>
+</div>
+<ul>
+<li><b>More thinking time = better moves</b>, with diminishing returns: 10 → 100 simulations gains 20 points; 100 → 1,000 gains 1.3.</li>
+<li><b>c = 0</b> is ε = 0 in a bandit: it commits to whatever looked good first and never re-checks. <b>c = 10</b> spreads simulations almost evenly, wasting them on bad moves. The middle is best: the explore-exploit balance from project 1, again.</li>
+</ul>
+<figure><img src="file:///D:/Langchain/rl_topics/08_model_based_planning/mcts_experiments.png" alt="MCTS experiments charts"><figcaption>Left: simulation budget. Middle: exploration constant. Right: the AlphaZero idea (next chapter).</figcaption></figure>
+
+<!-- ═══════════ 12 ═══════════ -->
+<h2><span class="n">12</span>The AlphaZero idea</h2>
+<p class="sub">Replace "try everything and play randomly to the end" with a neural network's intuition.</p>
+
+<p>Random rollouts are a poor judge in big games: a random game of Go says almost nothing about who's winning. AlphaZero (DeepMind, 2017; for Go, chess and shogi) changed two things in MCTS:</p>
+<table>
+<tr><th style="width:30%">Plain MCTS</th><th>AlphaZero-style MCTS</th></tr>
+<tr><td>new moves tried in random order</td><td>a <b>policy network</b> gives each move a prior P: "this move looks promising"</td></tr>
+<tr><td>leaf judged by a random rollout</td><td>a <b>value network</b> judges the position directly: "X is winning, about +0.6"</td></tr>
+<tr><td>UCB: W/N + c·√(ln N<sub>p</sub>/N)</td><td><b>PUCT</b>: Q + c·P·√N<sub>p</sub> / (1 + N): the prior P scales the exploration bonus</td></tr>
+</table>
+
+<h3>The self-play loop (in words)</h3>
+<figure>
+<svg viewBox="0 0 760 140" role="img" aria-label="AlphaZero loop: network guides MCTS, self-play games produce training data, network improves">
+  <defs><marker id="f12" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="30" width="200" height="70" rx="6" class="bxa"/><text x="120" y="56" text-anchor="middle" font-weight="700">NETWORK</text><text x="120" y="78" text-anchor="middle" class="t-m">priors P, value v</text>
+  <line x1="220" y1="65" x2="278" y2="65" class="ln" marker-end="url(#f12)"/><text x="249" y="57" text-anchor="middle" class="t-m">guides</text>
+  <rect x="280" y="30" width="200" height="70" rx="6" class="bx"/><text x="380" y="56" text-anchor="middle" font-weight="700">MCTS SELF-PLAY</text><text x="380" y="78" text-anchor="middle" class="t-m">plays itself, many games</text>
+  <line x1="480" y1="65" x2="538" y2="65" class="ln" marker-end="url(#f12)"/><text x="509" y="57" text-anchor="middle" class="t-m">data</text>
+  <rect x="540" y="30" width="200" height="70" rx="6" class="bxg"/><text x="640" y="52" text-anchor="middle" font-weight="700">TRAIN</text><text x="640" y="72" text-anchor="middle" class="t-m">P ← search's visit counts</text><text x="640" y="90" text-anchor="middle" class="t-m">v ← who actually won</text>
+  <path d="M640,100 V125 H120 V102" class="ln" marker-end="url(#f12)"/><text x="380" y="122" text-anchor="middle" class="t-m">a better network → a better search → better data → …</text>
+</svg>
+<figcaption>The search is smarter than the raw network, so the network learns to imitate the search. Then the search gets smarter still. No human games needed.</figcaption>
+</figure>
+
+<h3>Our small experiment (we have no trained network)</h3>
+<p>We built a <b>pretend network</b> from the answer key <i>with mistakes added</i>: priors ∝ e<sup>2 × (true score + noise)</sup> (an unreliable hint), value = true value + noise (std 0.5). Real output, % perfect moves:</p>
+<table>
+<tr><th>Simulations</th><th class="n">5</th><th class="n">10</th><th class="n">20</th><th class="n">50</th><th class="n">100</th></tr>
+<tr><td>plain MCTS (UCT, random rollouts)</td><td class="n">56.7</td><td class="n">78.7</td><td class="n">90.7</td><td class="n">97.3</td><td class="n">98.7</td></tr>
+<tr><td>PUCT, equal priors + rollouts</td><td class="n">63.3</td><td class="n">83.3</td><td class="n">90.7</td><td class="n">96.0</td><td class="n">97.3</td></tr>
+<tr><td>PUCT, pretend priors + rollouts</td><td class="n">84.7</td><td class="n">86.7</td><td class="n">87.3</td><td class="n">91.3</td><td class="n">95.3</td></tr>
+<tr><td>PUCT, pretend priors + pretend value</td><td class="n"><b>86.0</b></td><td class="n">86.7</td><td class="n">90.0</td><td class="n">94.7</td><td class="n">98.0</td></tr>
+<tr><td>the pretend prior alone (no search)</td><td class="n" colspan="5">78.7</td></tr>
+</table>
+<ul>
+<li><b>With few simulations, priors help hugely</b>: 86% vs 57% at 5 simulations. In Go you can never search everything, so this is what makes the search good.</li>
+<li><b>Search improves even a decent hint</b>: the prior alone plays 78.7% perfect; with search it reaches 95–98%.</li>
+<li><b>With lots of simulations, a flawed prior can slightly hurt</b> (95.3% vs 98.7%): it keeps steering search toward its mistakes. Real AlphaZero fixes this by continually <i>training</i> the network on the search's results, so the hint keeps getting better.</li>
+</ul>
+<div class="box plain"><span class="tag">MuZero, in one paragraph</span>
+<p>AlphaZero still needs the game's rules (<code>game.play</code>). <b>MuZero</b> (DeepMind, 2019/2020) also <i>learns</i> the model: a network predicts the next hidden state and reward, and MCTS plans inside that learned model. That puts it in Dyna's spirit (a learned model) with AlphaZero's search, and it was also applied to Atari games, where nobody gives you the rules.</p>
+</div>
+
+<!-- ═══════════ 13 ═══════════ -->
+<h2><span class="n">13</span>Real-world problems</h2>
+<div class="box plain"><span class="tag">When model-based methods fit</span>
+<p>✔ Real experience is expensive but thinking is cheap. ✔ You know the rules (games, puzzles, logistics with known travel times) or can learn a decent model. ✘ The world is too messy to model well: errors in the model get planned on confidently ("planning in a wrong map").</p>
+</div>
+
+<h3>1 · Board games (well documented)</h3>
+<p>AlphaGo beat world champion Lee Sedol at Go in 2016 (MCTS + policy and value networks, initially trained on human games); AlphaZero learned Go, chess and shogi from self-play alone (2017). State = board, action = legal move, reward = +1/0/−1 at the end, model = the rules. Exactly chapters 08–12, at enormous scale.</p>
+
+<h3>2 · A delivery robot in a warehouse</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>robot position, carried item, positions of shelves and other robots</td></tr>
+<tr><td><b>Action</b></td><td>move in 4 directions, pick, drop</td></tr>
+<tr><td><b>Reward</b></td><td>−1 per move, +20 per delivery, −50 for collisions</td></tr>
+<tr><td><b>Model</b></td><td>learned: "moving right from aisle 3 takes me to aisle 4 (unless blocked)"</td></tr>
+<tr><td><b>Why Dyna</b></td><td>Real driving is slow and wears out the robot; replaying the notebook overnight improves the plan for free. Use Dyna-Q+'s bonus because shelves get moved (the blocking maze!).</td></tr>
+</table>
+
+<h3>3 · Planning routes or schedules with known rules</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>jobs remaining, machine availability, time</td></tr>
+<tr><td><b>Action</b></td><td>which job to put on which machine next</td></tr>
+<tr><td><b>Reward</b></td><td>−(total lateness) at the end</td></tr>
+<tr><td><b>Model</b></td><td>given: job durations are known, so you can simulate schedules</td></tr>
+<tr><td><b>Why MCTS</b></td><td>Too many orderings to try all (a tree like chess), but simulation is cheap and exact. MCTS has been studied for scheduling and planning problems ("could be used for").</td></tr>
+</table>
+
+<h3>4 · Model predictive control (robots, self-driving research)</h3>
+<p>At every moment: use a model of the physics to imagine the next few seconds for several candidate action sequences, carry out the first step of the best one, then re-plan. It's decision-time planning, like MCTS but with continuous actions. Widely used in industrial control; learned models (as in MuZero/Dyna) are an active research area.</p>
+
+<!-- ═══════════ 14 ═══════════ -->
+<h2><span class="n">14</span>Side by side</h2>
+<table class="long">
+<tr><th style="width:18%"></th><th>Value iteration</th><th>Q-learning</th><th>Dyna-Q</th><th>MCTS</th><th>AlphaZero</th></tr>
+<tr><td>Model</td><td>given, full probabilities</td><td>none</td><td><b>learned</b> (notebook)</td><td>given (rules)</td><td>given + learned networks</td></tr>
+<tr><td>When it plans</td><td>before playing (sweeps)</td><td>never</td><td>between real steps</td><td><b>before each move</b></td><td>before each move</td></tr>
+<tr><td>What it stores</td><td>V for every state</td><td>Q-table</td><td>Q-table + notebook</td><td>a search tree, thrown away after the move</td><td>networks + temporary tree</td></tr>
+<tr><td>Uses real experience</td><td>no</td><td>once per step</td><td>once + n replays</td><td>no (imagined games)</td><td>self-play games</td></tr>
+<tr><td>Main formula</td><td>Bellman optimality</td><td>Bellman target</td><td>Bellman target ×(1+n)</td><td>UCB: W/N + c√(ln N<sub>p</sub>/N)</td><td>PUCT: Q + cP√N<sub>p</sub>/(1+N)</td></tr>
+<tr><td>Our result</td><td>gridworld in 9 sweeps</td><td>maze: game 30 to &lt;20 steps</td><td>maze: game 3 (n = 50)</td><td>tic-tac-toe 100% perfect at 1,000 sims</td><td>86% at only 5 sims (pretend net)</td></tr>
+<tr><td>Weak spot</td><td>needs the full rule book</td><td>slow: many real steps</td><td>wrong model → wrong plans</td><td>random rollouts are weak judges in big games</td><td>huge compute to train</td></tr>
+</table>
+
+<!-- ═══════════ 15 ═══════════ -->
+<h2><span class="n">15</span>Clearing up the confusions</h2>
+<div class="qa"><div class="q">Is Dyna's "model" a neural network?</div><p>Not here: it's a dictionary, (s, a) → (r, s′). For big or continuous worlds the model can be a network (as in MuZero), but the idea is the same.</p></div>
+<div class="qa"><div class="q">Do planning steps use a different update than Q-learning?</div><p>No. Exactly the same Bellman update. Only the source of (s, a, r, s′) differs: the notebook instead of the world.</p></div>
+<div class="qa"><div class="q">Can Dyna imagine moves it has never tried?</div><p>No. The notebook only contains what really happened. Planning spreads known information around; it can't invent new facts. (Dyna-Q+ "pretends" untried moves stay put with reward 0, purely to give them a curiosity bonus.)</p></div>
+<div class="qa"><div class="q">Why didn't more planning (n = 100) beat n = 50?</div><p>Once the Q-table agrees with the notebook, extra replays change little. The remaining cost is exploring game 1 and random ε moves, which thinking can't remove.</p></div>
+<div class="qa"><div class="q">Is MCTS's "backpropagation" the same as in neural networks?</div><p>No, an unlucky shared name. In MCTS it means "add this simulation's result to every node on the path". In networks it means computing gradients with the chain rule.</p></div>
+<div class="qa"><div class="q">Does MCTS learn anything between moves?</div><p>Plain MCTS: no. It builds a fresh tree each turn and throws it away. AlphaZero adds learning by training its networks on the search results.</p></div>
+<div class="qa"><div class="q">Why play the most visited move, not the best win rate?</div><p>UCB sends visits to moves that keep looking good, so visits are a reliable vote. A rarely visited move's win rate is based on very few games and could be luck.</p></div>
+<div class="qa"><div class="q">How is this related to the Monte Carlo booklet?</div><p>"Monte Carlo" = estimate by averaging random samples. Rollouts are Monte Carlo estimates of a position's value; MCTS organises them into a tree.</p></div>
+
+<div class="qa"><div class="q">Did AlphaZero use the Bellman equation?</div><p>Not directly: its value network learns from who actually won the self-play games (a Monte Carlo target), and its policy learns from MCTS visit counts. Search does the "look-ahead" job that bootstrapping does in TD methods.</p></div>
+
+<!-- ═══════════ 16 ═══════════ -->
+<h2><span class="n">16</span>Practice problems</h2>
+<ol>
+<li><b>Dyna trace.</b> Corridor 0 → 1 → G, reward 1 at G, α = 0.5, γ = 0.9, all Q = 0. After game 1, Q[1, right] = 0.5. In game 2 the first real step is 0 → 1 (r = 0), followed by one planning step that replays (0, right). What is Q[0, right] after the real step, and after the planning step?</li>
+<li><b>Counting updates.</b> 300 real steps with n = 20. How many Q-updates in total?</li>
+<li><b>UCB.</b> Parent N = 20, c = 1.4. Child A: N = 10, W = 7. Child B: N = 2, W = 1. Which does UCB pick? (ln 20 ≈ 3.0)</li>
+<li><b>Backup.</b> A simulation passes root → move 4 → reply 0 → move 8 and ends in a draw. Which nodes get N += 1, and how much is added to W for each?</li>
+<li><b>Tree size.</b> A game with 10 moves per turn lasting 20 turns: about how many move sequences? Written as a power of 10?</li>
+<li><b>PUCT.</b> c = 1.5, parent N = 16. Child A: Q = 0.6, P = 0.1, N = 3. Child B: Q = 0.4, P = 0.6, N = 3. PUCT score of each?</li>
+<li><b>Conceptual.</b> The robot's notebook says "aisle 3 → aisle 4", but a pallet now blocks the way. What happens with plain Dyna-Q? What fixes it?</li>
+<li><b>Conceptual.</b> Why can't plain MCTS be used on FrozenLake without changes? (Hint: what does the rollout need?)</li>
+<li><b>Coding.</b> In <code>dyna_experiments.py</code>, try ε = 0.3 on the blocking maze for plain Dyna-Q. Predict: does it escape?</li>
+<li><b>Coding.</b> In <code>mcts_experiments.py</code>, try c = 0.1. Between which two existing rows do you expect it to land?</li>
+</ol>
+
+<!-- ═══════════ 17 ═══════════ -->
+<h2><span class="n">17</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\08_model_based_planning
+python dyna_maze.py           <span class="c"># hand trace + the maze with n = 0, 5, 50                         (~30 s)</span>
+python dyna_experiments.py    <span class="c"># planning steps sweep + blocking/shortcut mazes, Dyna-Q+          (~2-3 min)</span>
+python tictactoe_mcts.py      <span class="c"># tree sizes, 12-simulation search by hand, matches, Connect-4    (~2-3 min)</span>
+python mcts_experiments.py    <span class="c"># budget, exploration c, the AlphaZero idea                      (~1-2 min)</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">Dyna-Q</span>
+<pre style="background:#fff;margin:6px 0">every real step (s,a,r,s′):
+  Q-update(s,a,r,s′)        # direct RL
+  model[s,a] = (r,s′)       # notebook
+  repeat n times:
+    pick a remembered (ŝ,â)
+    (r̂,ŝ′) = model[ŝ,â]
+    Q-update(ŝ,â,r̂,ŝ′)      # planning</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">MCTS</span>
+<pre style="background:#fff;margin:6px 0">repeat for the budget:
+  1 select: best UCB child
+      W/N + c·√(ln N_parent / N)
+  2 expand: add one untried move
+  3 simulate: random to the end
+  4 backup: N+=1, W+=result on path
+play the most visited move
+AlphaZero: P priors + value net (PUCT)</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>A model predicts what happens after an action; planning means learning or deciding with imagined experience from it.</li>
+<li>Dyna-Q writes a notebook from real steps and replays it n times per step with the normal Q-learning update: far fewer real steps (game 30 → game 3).</li>
+<li>MCTS searches ahead before each move: select by UCB, expand, simulate randomly, back up the result; then play the most visited move.</li>
+<li>AlphaZero replaces random choices with a network's priors and value, and improves that network from its own searches through self-play.</li>
+</ol>
+</div>
+
+<!-- ═══════════ 18 ═══════════ -->
+<h2><span class="n">18</span>Answers</h2>
+<ol>
+<li>Real step: target = 0 + 0.9 × max Q[1] = 0.9 × 0.5 = 0.45; Q[0, right] = 0 + 0.5 × 0.45 = <b>0.225</b>. Planning replays (0, right) → 1 with the same target 0.45: Q = 0.225 + 0.5 × (0.45 − 0.225) = <b>0.3375</b>.</li>
+<li>300 × (1 + 20) = <b>6,300</b>.</li>
+<li>A: 0.7 + 1.4·√(3.0/10) = 0.7 + 1.4 × 0.548 = <b>1.467</b>. B: 0.5 + 1.4·√(3.0/2) = 0.5 + 1.4 × 1.225 = <b>2.215</b>. UCB picks <b>B</b>: rarely tried, so it gets checked.</li>
+<li>All four nodes on the path (root, move 4, reply 0, move 8) get N += 1, and each gets W += <b>0.5</b> (a draw counts half for whichever player).</li>
+<li>10<sup>20</sup> sequences (100 billion billion).</li>
+<li>√16 = 4. A: 0.6 + 1.5 × 0.1 × 4 / 4 = 0.6 + 0.15 = <b>0.75</b>. B: 0.4 + 1.5 × 0.6 × 4 / 4 = 0.4 + 0.9 = <b>1.30</b>. B is explored more because the network likes it.</li>
+<li>Plain Dyna-Q keeps rehearsing the old route, values stay high, and it keeps bumping into the pallet; its random ε moves rarely find a detour (the blocking maze: 0.2 goals). Dyna-Q+'s "not tried lately" bonus, or simply re-learning faster from real failures, fixes it.</li>
+<li>Rollouts need a model: "play the game forward from here". FrozenLake hides its rules from the agent. You'd first have to learn a model (like Dyna) or be given <code>env.unwrapped.P</code>. Also the ice is random, so the tree would need chance nodes.</li>
+<li>A sensible prediction: more random moves make it more likely to stumble onto the new path, so maybe it escapes slowly, but training reward drops. Run it to see.</li>
+<li>Between c = 0 (90.0%) and c = 0.25 (98.0%): a little exploration, not quite enough.</li>
+</ol>
+
+</main>
+</body>
+</html>

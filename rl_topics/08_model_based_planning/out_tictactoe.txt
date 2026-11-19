@@ -1,0 +1,76 @@
+==================================================================
+PART 1 · How big is the game tree?
+==================================================================
+  Tic-tac-toe, full tree: 549,946 positions in the tree, 255,168 different games  (0.5 s to walk it all)
+  Perfect play from the empty board (minimax): value 0  (0 = draw)
+  Different boards (positions met more than once counted once): 5,478
+
+  Rough size of the tree = (moves per turn) ^ (turns per game):
+     tic-tac-toe  about   4 ^ 9   = 10^5
+     chess        about  35 ^ 80  = 10^124
+     Go (19x19)   about 250 ^ 150 = 10^360
+
+==================================================================
+PART 2 · A tiny search you can check by hand (12 simulations, c = 1.4)
+==================================================================
+     X O X
+     O O X
+     . . .     X to move. Empty squares: 6, 7, 8
+  sim  1: path 6       rollout ends: O
+  sim  2: path 8       rollout ends: X
+  sim  3: path 7       rollout ends: draw
+  sim  4: path 8       rollout ends: X
+  sim  5: path 8       rollout ends: X
+  sim  6: path 7-8     rollout ends: draw
+  sim  7: path 8       rollout ends: X
+  sim  8: path 8       rollout ends: X
+  sim  9: path 6-7     rollout ends: O
+  sim 10: path 7-6     rollout ends: X
+  sim 11: path 8       rollout ends: X
+  sim 12: path 7-8-6   rollout ends: draw
+
+  Root children after the search (W = wins for X, a draw counts 0.5):
+     move 6:  N =  2   W =  0.0   W/N = 0.000   UCB for the next pick = 1.561
+         then O plays 7:  N = 1   W(for O) = 1.0
+     move 7:  N =  4   W =  2.5   W/N = 0.625   UCB for the next pick = 1.728
+         then O plays 6:  N = 1   W(for O) = 0.0
+         then O plays 8:  N = 2   W(for O) = 1.0
+     move 8:  N =  6   W =  6.0   W/N = 1.000   UCB for the next pick = 1.901
+  Root: N = 12.  MCTS plays the most visited move: 8
+
+==================================================================
+PART 3 · MCTS vs a random player (100 games each)
+==================================================================
+  random vs random (1000 games): X wins 55.8%, draws 14.2%, O wins 30.0%
+      1 sims:  as X  win  58  draw   6  lose  36   |   as O  win  36  draw   8  lose  56   (0.0 s)
+     10 sims:  as X  win  84  draw   7  lose   9   |   as O  win  67  draw  12  lose  21   (0.1 s)
+     50 sims:  as X  win  99  draw   1  lose   0   |   as O  win  77  draw  16  lose   7   (0.2 s)
+    200 sims:  as X  win  98  draw   2  lose   0   |   as O  win  87  draw  10  lose   3   (1.0 s)
+   1000 sims:  as X  win 100  draw   0  lose   0   |   as O  win  92  draw   8  lose   0   (7.5 s)
+
+==================================================================
+PART 4 · MCTS vs MCTS (50 games each)
+==================================================================
+  X = MCTS 1000 sims vs O = MCTS 1000 sims:  X wins  1, draws 49, O wins  0   (4.1 s)
+  X = MCTS   50 sims vs O = MCTS 1000 sims:  X wins  0, draws 49, O wins  1   (2.2 s)
+  X = MCTS 1000 sims vs O = MCTS   50 sims:  X wins 39, draws 11, O wins  0   (2.0 s)
+
+==================================================================
+PART 5 · First move on the empty board (2000 simulations)
+==================================================================
+  Visit counts:                 Average result for X (win 1, draw 0.5):
+       270   103   235          0.693 0.553 0.674
+       191   473   200          0.649 0.749 0.652
+       166   149   213          0.627 0.611 0.662
+  MCTS plays square 4 (24% of all visits)
+
+==================================================================
+PART 6 · Connect-4 (7 columns, 6 rows): MCTS as X vs random (20 games each)
+==================================================================
+    25 sims:  win 19  draw  0  lose  1   (0.2 s)
+   100 sims:  win 20  draw  0  lose  0   (0.7 s)
+   400 sims:  win 20  draw  0  lose  0   (2.4 s)
+  MCTS 400 (X) vs MCTS 25 (O): X wins 20, draws 0, O wins 0   (3.3 s)
+  MCTS 25 (X) vs MCTS 400 (O): X wins 2, draws 0, O wins 18   (9.4 s)
+
+Chart saved to tictactoe_mcts_results.png

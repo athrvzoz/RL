@@ -1,0 +1,22 @@
+  full DQN       seed 0: test score during training: mean 215.0, best 431.0 | final net 184.3 | best net 474.6 | max-Q on exam states at end   54.6
+  full DQN       seed 1: test score during training: mean 165.0, best 260.8 | final net 140.8 | best net 256.5 | max-Q on exam states at end   56.2
+
+  no replay      seed 0: test score during training: mean  44.4, best 291.2 | final net 257.0 | best net 257.0 | max-Q on exam states at end   67.3
+  no replay      seed 1: test score during training: mean  19.4, best 106.6 | final net 114.2 | best net 114.2 | max-Q on exam states at end   62.7
+
+  no target net  seed 0: test score during training: mean   9.2, best   9.2 | final net   9.5 | best net   9.5 | max-Q on exam states at end 26634630.0
+  no target net  seed 1: test score during training: mean   9.5, best   9.5 | final net   9.3 | best net   9.3 | max-Q on exam states at end 12803386.0
+
+  Double DQN     seed 0: test score during training: mean 168.2, best 500.0 | final net 216.7 | best net 500.0 | max-Q on exam states at end   55.6
+  Double DQN     seed 1: test score during training: mean 139.3, best 304.3 | final net 289.8 | best net 289.8 | max-Q on exam states at end   57.8
+
+Summary (average over seeds)
+  variant         avg test during training   final net   best net   avg max-Q at end
+  full DQN                           190.0       162.6      365.5               55.4
+  no replay                           31.9       185.6      185.6               65.0
+  no target net                        9.3         9.4        9.4         19719008.0
+  Double DQN                         153.8       253.2      394.9               56.7
+  (for reference: a perfect CartPole policy scores 500; with γ = 0.99 the largest
+   possible Q is about 1/(1−0.99) = 100)
+
+Chart saved to ablations.png

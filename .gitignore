@@ -1,0 +1,57 @@
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ── Virtual environments & secrets ───────────────────────────────────────
+.venv/
+venv/
+env/
+.env
+.env.*
+*.key
+*.pem
+
+# ── Editors / OS ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.claude/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs & scratch output ─────────────────────────────────────────────────
+*.log
+*.output
+compare_out.txt
+# page snapshots used only to check the booklet PDFs while building them
+rl_topics/**/_check/
+
+# ── RL training artefacts ─────────────────────────────────────────────────
+# small trained models (*.pt) are kept on purpose so `watch` modes work;
+# large checkpoints / experiment runs are not
+*.ckpt
+runs/
+wandb/
+mlruns/
+tb_logs/
+
+# ── slot_lab: keep the scripts, never the captured data ──────────────────
+# captures/maps hold game session IDs and the provider's artwork
+slot_lab/captures/
+slot_lab/maps/
+slot_lab/templates/
+slot_lab/scene_elements.json
+slot_lab/locate_result.*
+*.har
+
+# ── Not part of this RL repo (LangChain tutorial scripts in the root) ─────
+/0[1-9]_*.py

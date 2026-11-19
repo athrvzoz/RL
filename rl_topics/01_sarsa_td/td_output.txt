@@ -1,0 +1,49 @@
+======================================================================
+PART 1 · The first game, by hand (α = 0.1, every V starts at 0.5)
+======================================================================
+  The game: C → D → C → B → A → L   (reward at the end: 0)
+
+  TD(0): update after every step
+    step 1: C → D, r = 0   target = 0 + 0.500 = 0.500   δ = +0.000   V(C) 0.500 → 0.500
+    step 2: D → C, r = 0   target = 0 + 0.500 = 0.500   δ = +0.000   V(D) 0.500 → 0.500
+    step 3: C → B, r = 0   target = 0 + 0.500 = 0.500   δ = +0.000   V(C) 0.500 → 0.500
+    step 4: B → A, r = 0   target = 0 + 0.500 = 0.500   δ = +0.000   V(B) 0.500 → 0.500
+    step 5: A → L, r = 0   target = 0 + 0.000 = 0.000   δ = -0.500   V(A) 0.500 → 0.450
+  V after the game: A 0.450  B 0.500  C 0.500  D 0.500  E 0.500
+
+  Monte Carlo: wait for the end, then update every step with the real total G
+    A (step 5): G = 0   V(A) 0.500 → 0.450
+    B (step 4): G = 0   V(B) 0.500 → 0.450
+    C (step 3): G = 0   V(C) 0.500 → 0.450
+    D (step 2): G = 0   V(D) 0.500 → 0.450
+    C (step 1): G = 0   V(C) 0.450 → 0.405
+  V after the game: A 0.450  B 0.450  C 0.405  D 0.450  E 0.500
+
+======================================================================
+PART 2 · TD(0) vs Monte Carlo, 100 games, average of 100 runs
+======================================================================
+  TD(0)  α = 0.05  RMS error after 10 games 0.175, after 50 0.056, after 100 0.036
+  TD(0)  α = 0.1   RMS error after 10 games 0.129, after 50 0.056, after 100 0.054
+  TD(0)  α = 0.15  RMS error after 10 games 0.096, after 50 0.075, after 100 0.068
+  MC     α = 0.01  RMS error after 10 games 0.213, after 50 0.143, after 100 0.092
+  MC     α = 0.02  RMS error after 10 games 0.199, after 50 0.108, after 100 0.076
+  MC     α = 0.04  RMS error after 10 games 0.183, after 50 0.106, after 100 0.103
+
+  One TD(0) run (α = 0.1), the values after N games:
+    after   0 games: A 0.50  B 0.50  C 0.50  D 0.50  E 0.50
+    after   1 games: A 0.50  B 0.50  C 0.50  D 0.50  E 0.55
+    after  10 games: A 0.35  B 0.46  C 0.52  D 0.57  E 0.70
+    after 100 games: A 0.22  B 0.40  C 0.58  D 0.76  E 0.91
+    true values:     A 0.17  B 0.33  C 0.50  D 0.67  E 0.83
+
+======================================================================
+PART 3 · n-step TD on a 19-square walk (left end −1, right end +1), first 10 games, 50 runs
+======================================================================
+  n=1   best α = 0.80, average RMS error = 0.346
+  n=2   best α = 0.60, average RMS error = 0.281
+  n=4   best α = 0.40, average RMS error = 0.271
+  n=8   best α = 0.20, average RMS error = 0.283
+  n=16  best α = 0.10, average RMS error = 0.322
+  MC    best α = 0.02, average RMS error = 0.479
+
+Charts saved to td_vs_mc.png and nstep.png

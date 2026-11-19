@@ -1,0 +1,33 @@
+Positions where the game is not over: 4,520; where the choice matters: 3,191; test set: 150
+A random move would be perfect 39.0% of the time
+
+==================================================================
+EXPERIMENT 1 · Simulation budget (c = 1.4): % perfect moves
+==================================================================
+     10 simulations:  78.7% perfect   (0.0 s)
+     30 simulations:  92.0% perfect   (0.0 s)
+    100 simulations:  98.7% perfect   (0.1 s)
+    300 simulations:  99.3% perfect   (0.2 s)
+   1000 simulations: 100.0% perfect   (0.6 s)
+
+==================================================================
+EXPERIMENT 2 · Exploration constant c (100 simulations): % perfect moves
+==================================================================
+  c = 0    :  90.0% perfect
+  c = 0.25 :  98.0% perfect
+  c = 0.7  :  96.0% perfect
+  c = 1.4  :  98.7% perfect
+  c = 3    :  98.0% perfect
+  c = 10   :  94.7% perfect
+
+==================================================================
+EXPERIMENT 3 · The AlphaZero idea: priors and a value instead of blind search
+==================================================================
+  simulations:                                    5     10     20     50    100
+  plain MCTS (UCT, random rollouts)           56.7%  78.7%  90.7%  97.3%  98.7%
+  PUCT, equal priors + random rollouts        63.3%  83.3%  90.7%  96.0%  97.3%
+  PUCT, pretend-network priors + rollouts     84.7%  86.7%  87.3%  91.3%  95.3%
+  PUCT, pretend priors + pretend value        86.0%  86.7%  90.0%  94.7%  98.0%
+  (the pretend prior alone, no search: plays its top move 78.7% perfect)
+
+Chart saved to mcts_experiments.png

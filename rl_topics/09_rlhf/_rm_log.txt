@@ -1,0 +1,49 @@
+================================================================
+STAGE 2 · Supervised fine-tuning on 18 demo replies
+================================================================
+
+  BEFORE SFT (every word equally likely): sample replies to 'I was charged twice!'
+     refund tracking link tracking link link refund ok true score -8.3
+     ok great refund hi sorry refund hi            true score -0.6
+     hi tracking please tracking tracking sorry reset refund true score -2.0
+     ok refund link sorry ok hi link tracking      true score -2.8
+     please                                        true score +0.5
+
+  AFTER SFT (this is pi_ref): sample replies to 'I was charged twice!'
+     tracking refund                               true score +1.0
+     great refund please great                     true score +0.7
+     sorry reset hi great refund                   true score +2.7
+     sorry                                         true score +2.0
+     link great sorry refund please ok refund refund true score -2.1
+  Average hidden true score before SFT: -2.44   (avg length 5.14 words)
+  Average hidden true score after SFT : +0.49   (avg length 3.64 words)
+
+================================================================
+STAGE 3 · Reward model from 3,000 human comparisons
+================================================================
+  pair 0: 'I forgot my password.'
+     human picked: reset link please link                  over: hi hi reset link
+  pair 1: 'I was charged twice!'
+     human picked: sorry ok please                         over: tracking ok refund
+  pair 2: 'I was charged twice!'
+     human picked: hi sorry refund                         over: (empty)
+
+  Loss: start 0.6931 (= log 2, a coin flip)  ->  end 0.5299
+  Accuracy on the 2,400 training pairs : 72.9%
+  Accuracy on the 600 held-out pairs   : 71.6%
+  Best possible (judge with the hidden true score): 88.1%   <- labellers are noisy, nobody gets 100%
+
+  Learned reward per word (r(reply) = sum of these over the words in it):
+                                  hi    sorry   please tracking   refund    reset     link    great       ok
+     Where is my parcel?       -0.19    -0.24    -0.36    +0.22    -0.73    -0.63    +0.29    -0.44    -0.26
+     I was charged twice!      -0.33    +0.25    -0.26    -0.82    +0.40    -0.99    -0.53    -0.52    -0.56
+     I forgot my password.     -0.29    -0.26    -0.26    -0.74    -0.78    +0.32    +0.45    -0.50    -0.50
+
+  The blind spot: the reward model scores replies by adding up word weights.
+     sorry refund                                               RM +0.65   true +4.0
+     hi sorry refund please                                     RM +0.06   true +5.0
+     sorry refund sorry refund                                  RM +1.30   true +1.0
+     refund refund refund refund refund refund refund refund    RM +3.21   true -10.5
+
+  Saved stage_data.npz
+  Chart saved to reward_model.png

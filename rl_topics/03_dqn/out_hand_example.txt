@@ -1,0 +1,29 @@
+1 · FORWARD PASS
+  z1 = 0.5×1 + (−0.2)×2 + 0.1 = 0.20     z2 = 0.3×1 + 0.1×2 − 0.4 = 0.10
+  ReLU:  h1 = 0.20   h2 = 0.10
+  Q(left)  = 1.0×0.20 + (−1.0)×0.10 + 0.0 = 0.10
+  Q(right) = 0.5×0.20 + 2.0×0.10 + 0.2 = 0.50
+
+2 · THE LOSS FOR ONE MOVE
+  took RIGHT, r = 1.0, best Q in s2 (from the target net) = 1.0
+  target = 1.0 + 0.9 × 1.0 = 1.90
+  loss = (target − Q(s,right))² = (1.90 − 0.50)² = 1.9600
+
+3 · BACKPROP (chain rule) for a few weights
+  dL/dQ = −2 × (target − Q) = -2.80
+  dL/dW2[right,1] = dL/dQ × h1 = -2.80 × 0.20 = -0.560
+  dL/dW2[right,2] = dL/dQ × h2 = -2.80 × 0.10 = -0.280
+  dL/dh1 = dL/dQ × W2[right,1] = -2.80 × 0.5 = -1.400
+  ReLU passes the gradient only where z > 0 (z1 = 0.20 > 0, so it passes)
+  dL/dW1[1,1] = dL/dz1 × s1 = -1.400 × 1.0 = -1.400
+
+4 · ONE GRADIENT-DESCENT STEP (learning rate 0.01), all weights
+  Q(s, right): 0.500 -> 1.245   (target 1.90)
+  new loss = 0.4293   (was 1.9600)
+  Q(s, left) also moved: 0.100 -> -0.152  (shared hidden layer!)
+
+5 · WHY max IS TOO OPTIMISTIC
+  4 actions, all truly worth 0. Estimates = truth + noise (std 1).
+  average of ONE estimate: +0.004
+  average of the MAX of the 4 estimates: +1.031   <- too high!
+  Double trick: pick with one estimate, value with an independent one: +0.008

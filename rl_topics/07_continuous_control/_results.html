@@ -1,0 +1,116 @@
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>Running it on Pendulum</h2>
+<p class="sub">Real output of <code>python pendulum_experiment.py</code>: 15,000 steps each (75 games), seed 0. Random torques score about −1,112 per game.</p>
+
+<table>
+<tr><th>Test score (avg of 5 games) after</th><th class="n">1,000</th><th class="n">3,000</th><th class="n">5,000</th><th class="n">7,000</th><th class="n">9,000</th><th class="n">15,000</th><th class="n">time</th></tr>
+<tr><td>DDPG</td><td class="n">−1047</td><td class="n">−666</td><td class="n"><b>−100</b></td><td class="n">−97</td><td class="n">−97</td><td class="n">−97</td><td class="n">100 s</td></tr>
+<tr><td>TD3</td><td class="n">−1047</td><td class="n">−1244</td><td class="n">−165</td><td class="n">−128</td><td class="n">−100</td><td class="n">−96</td><td class="n">109 s</td></tr>
+<tr><td>SAC</td><td class="n">−1044</td><td class="n">−705</td><td class="n">−124</td><td class="n">−98</td><td class="n">−97</td><td class="n">−96</td><td class="n">117 s</td></tr>
+</table>
+<figure><img style="max-width:150mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/07_continuous_control/pendulum_curves.png" alt="Learning curves DDPG TD3 SAC"><figcaption>All three learn to swing up and balance within 4,000–8,000 steps (20–40 games). The first 1,000 steps are random warm-up. Every method gets <i>worse</i> right after learning starts (−1,400 to −1,600), before it gets better.</figcaption></figure>
+
+<h3>A fairer exam: 100 fresh games each (<code>eval100.py</code>)</h3>
+<table>
+<tr><th>Player</th><th class="n">avg total reward, 100 games</th></tr>
+<tr><td>random torques</td><td class="n">−1190.5</td></tr>
+<tr><td>DDPG</td><td class="n">−140.4</td></tr>
+<tr><td>TD3</td><td class="n">−142.0</td></tr>
+<tr><td>SAC</td><td class="n"><b>−138.5</b></td></tr>
+</table>
+<p>The 5 training test games happened to start in easy positions (−96). Over 100 random starts all three average about <b>−140</b>, close to the best commonly reported for Pendulum (about −150 to −140). A start hanging straight down costs about −350 just to swing up, so 0 is impossible. On this easy task, the three methods tie.</p>
+
+<h3>One swing-up, from hanging straight down</h3>
+<figure><img style="max-width:140mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/07_continuous_control/pendulum_swing.png" alt="Swing-up angle and torque"><figcaption>Top: angle from upright. All three rock back and forth (full torque one way, then the other) to build up speed, like pumping a swing, and are upright by step 70–76. Bottom: torque. DDPG "rattles" between ±2 at the top; SAC and TD3 hold almost still.</figcaption></figure>
+<p>Nobody told them to pump: one push of ±2 isn't strong enough to lift the pendulum directly, so they discovered rocking. DDPG's rattle is an honest flaw: its policy flips sharply near upright and nothing in the reward penalised it.</p>
+
+<h3>Is the critic right? (start-state value)</h3>
+<pre>
+            step 1,000      step 5,000      step 15,000      really (discounted)
+DDPG          +0.1           −72.3           −75.4              −87.9
+TD3           +0.1           −28.8           −97.0              −87.0
+SAC           −0.1           −82.0           −98.1              −87.3
+</pre>
+<p>Early critics are badly wrong (0 vs about −455 really); they learn the true value from bootstrapped targets over thousands of updates. By the end DDPG's critic is somewhat <i>optimistic</i> (−75 vs −88), while TD3 and SAC, with their min of twin critics, are slightly <i>pessimistic</i> (−97 and −98). That's exactly the bias each design aims for: pessimism is safer than optimism.</p>
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>Looking inside the trained networks</h2>
+<p class="sub">Real output of <code>python peek_inside.py</code> (no training, just the saved networks).</p>
+
+<h3>The critic's hill, and where the actor stands (DDPG)</h3>
+<pre>
+state                       actor μ(s)   Q(s, μ(s))   slope ∂Q/∂a   best torque on the hill
+hanging down, still           −1.984       −243.00       −5.583           −2.00
+45° right of top, still       +0.389        −85.31       +0.426           −2.00
+10° left of top, still        +1.936         +1.74       +1.821           +2.00
+at top, spinning +3           −1.995        −89.10       −0.729           −2.00
+</pre>
+<figure><img style="max-width:125mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/07_continuous_control/critic_hill.png" alt="Critic Q over torques for four states"><figcaption>The critic's Q(s, a) for every torque, with the actor's choice marked. Mostly the actor stands at or near the top of its hill.</figcaption></figure>
+<p>In one state ("45° right, still") the actor's torque (+0.39) is not at the hill's top (−2.0). But look at the slope: <b>+0.426</b>, positive, so the hill is rising <i>towards larger torque</i> at that point. The critic's hill there is almost flat (−85.3 everywhere), so a small local bump decides the direction. Gradient-based actors only see the local slope, not the whole hill: they can get stuck on a small local peak. It doesn't matter much here; the state rarely occurs.</p>
+
+<h3>The chain rule with the trained networks (state: 45° right of top)</h3>
+<pre>
+z = +0.1970          a = 2·tanh(z) = +0.3890        Q = −85.309
+∂Q/∂a = +0.4261                    (slope of the critic's hill at that torque)
+∂a/∂b = 2·(1 − tanh²(z)) = 1.9243  (how the torque moves if the actor's last bias b moves)
+∂Q/∂b = +0.4261 × 1.9243 = +0.8200     autograd says +0.8200 ✓
+→ gradient ASCENT nudges b up by lr × 0.82, raising the torque
+</pre>
+
+<h3>SAC's bell curves</h3>
+<pre>
+state                       mean     torque = 2·tanh(mean)     σ (spread)
+hanging down, still        −1.907          −1.914               0.497
+45° right of top, still    +0.745          +1.264               0.202
+10° left of top, still     +3.071          +1.991               0.281
+at top, spinning +3        −2.735          −1.983               0.313
+</pre>
+<p>SAC is <b>least sure</b> when hanging down (σ = 0.50): it doesn't matter much which way it starts pumping. It's <b>most sure</b> near the top (σ = 0.20), where precision matters.</p>
+<div class="two">
+<div><figure style="margin:0"><img src="file:///D:/Langchain/rl_topics/07_continuous_control/sac_alpha.png" alt="SAC alpha over training"></figure></div>
+<div><p><b>SAC's curiosity dial α</b>, tuned by itself: 0.999 at the start → 0.211 after 2,000 updates → 0.096 after 7,000 → <b>0.047</b> at the end. Early on it pays a lot for randomness (explore!); once it knows how to balance, it buys certainty instead.</p></div>
+</div>
+
+<h3>Three different policies, all solving the task</h3>
+<figure><img src="file:///D:/Langchain/rl_topics/07_continuous_control/pendulum_policy_maps.png" alt="Policy maps"><figcaption>Torque chosen for every angle (x) and spin speed (y): red = +2, blue = −2. Dots: one swing-up from hanging down. The maps differ a lot away from the swing-up path. There, nothing was learned, because the agents never went there.</figcaption></figure>
+
+<!-- ═══════════ 12 ═══════════ -->
+<h2><span class="n">12</span>Experiments: turning the knobs</h2>
+<p class="sub">Real output of <code>knobs.py</code>: 10,000 steps per run, test score (avg of 5 games) at each 1,000 steps.</p>
+
+<h3>A · DDPG's exploration noise σ</h3>
+<pre>
+                         1k     2k     3k     4k     5k     6k    10k
+σ = 0.1 (normal)      −1047  −1405   −666   −128   −100    −98    −96
+σ = 0   (no noise)    −1047  −1405   −561   −319   −100    −98    −98
+σ = 0.5 (lots)        −1047  −1386   −623   −130    −98    −97    −96
+</pre>
+<p>On Pendulum, noise barely matters: random warm-up, random start positions and an imperfect early actor already create plenty of variety. On harder tasks (a robot that must find a narrow gait), no noise usually means getting stuck.</p>
+
+<h3>B · The target network's speed τ</h3>
+<pre>
+                         1k     2k     3k     4k     5k     6k    10k
+τ = 0.005 (normal)    −1047  −1405   −666   −128   −100    −98    −96
+τ = 0.05              −1047   −922    −99    −97    −97    −96    −98
+τ = 1 (no target net) −1047  −1203  −1393  −1023  −1076  −1042   −941
+</pre>
+<p><b>No target network (τ = 1) never learned</b>: still about −1,000 after 10,000 steps, the same "moving target" failure DQN showed (booklet 03). A faster target (0.05) happened to learn quickest here, but its critic wobbled (its start-value guess swung from −144 to −27 to −67), a warning sign on harder tasks.</p>
+
+<h3>C · SAC's temperature α</h3>
+<pre>
+                         1k     2k     3k     4k     5k     6k    10k
+α automatic (normal)  −1044  −1630   −705   −208   −124    −98    −97
+α = 0 (no curiosity)  −1044  −1404   −647   −131   −100   −102    −96
+α = 1 (very curious)  −1044  −1514   −984   −155   −124   −123   −121
+</pre>
+<p><b>Too much curiosity costs</b>: with α fixed at 1, SAC keeps acting randomly and stalls at about −121. α = 0 (SAC without the entropy bonus, close to TD3 with a random actor) does fine on this easy task. The automatic α gets both: curious early, precise late.</p>
+
+<h3>D · Was seed 0 just lucky?</h3>
+<pre>
+                         1k     2k     3k     4k     5k     6k     7k     8k     9k    10k
+DDPG seed 1           −1463  −1306   −873   −129   −104   −101   −101    −99    −98    −98
+DDPG seed 2           −1411  −1319   −269   −130   <b>−993</b>    −99    −99    −97    −97    −97
+SAC  seed 1           −1469  −1557   −679   −129   −126    −97    −99   <b>−412   −759</b>    −97
+SAC  seed 2           −1415  −1683   −269   −471   −125    −98    −97    −98    −97    −97
+</pre>
+<p>All seeds end near −97, so the result is real. But look at the bold numbers: <b>sudden temporary collapses</b> even after learning (DDPG seed 2 at 5k, SAC seed 1 at 8–9k). Deep RL training is bumpy; always test several seeds and keep the best checkpoint.</p>

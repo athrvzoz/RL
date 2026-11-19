@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DQN Deep Q-Networks</title>
+<!--STYLE-->
+</head>
+<body>
+<main>
+
+<!-- ═══════════ COVER ═══════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Booklet 03</div>
+  <h1>DQN:<br>Deep Q-Networks</h1>
+  <p class="lede">What to do when there are too many states for a Q-table: let a small neural network <i>guess</i> the Q-values. The same Bellman target you know, two tricks that make it stable, and a pole balanced on a cart. Every number comes from code in <code>rl_topics/03_dqn</code>.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture</div>
+    <div><span>02</span>Words you need</div>
+    <div><span>03</span>Intuition: memorise vs understand</div>
+    <div><span>04</span>Maths I: a neural network by hand</div>
+    <div><span>05</span>Maths II: loss, gradient, backprop</div>
+    <div><span>06</span>Why the simple version breaks</div>
+    <div><span>07</span>The algorithm</div>
+    <div><span>08</span>The code, line by line</div>
+    <div><span>09</span>Running it on CartPole</div>
+    <div><span>10</span>Experiments: remove the tricks</div>
+    <div><span>11</span>Real-world problems</div>
+    <div><span>12</span>Side by side</div>
+    <div><span>13</span>Clearing up the confusions</div>
+    <div><span>14</span>Practice problems</div>
+    <div><span>15</span>Run it yourself + cheat sheet</div>
+    <div><span>16</span>Answers</div>
+  </div>
+</section>
+
+<!-- ═══════════ 01 ═══════════ -->
+<h2><span class="n">01</span>The big picture</h2>
+<p class="sub">Your Q-table worked for 16 squares and 500 taxi states. What about infinitely many?</p>
+
+<p>FrozenLake had 16 states, so Q was a 16 × 4 table. Taxi had 500 states: 3,000 numbers. Now look at <b>CartPole</b>: a pole balanced on a cart. Its state is <b>4 real numbers</b>: cart position, cart speed, pole angle, pole spin. A real number can be 0.0312 or 0.0313 or anything in between. There are <b>infinitely many states</b>. You cannot make a table with a row for each.</p>
+
+<p>Even if you rounded the numbers, you'd hit the second problem from your earlier question: a state the agent <b>never visited</b> has an empty row, so it knows nothing there. In a world with millions of states, almost every state is new.</p>
+
+<figure>
+<svg viewBox="0 0 760 200" role="img" aria-label="Q-table lookup versus Q-network formula">
+  <defs><marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <text x="185" y="20" text-anchor="middle" class="t-h t-a">Q-TABLE (projects 1–3)</text>
+  <rect x="20" y="34" width="110" height="46" rx="5" class="bx"/><text x="75" y="62" text-anchor="middle">state 14</text>
+  <line x1="130" y1="57" x2="198" y2="57" class="ln" marker-end="url(#b1)"/><text x="164" y="49" text-anchor="middle" class="t-m">look up</text>
+  <rect x="200" y="30" width="150" height="54" rx="5" class="bxa"/><text x="275" y="52" text-anchor="middle" font-weight="700">row 14 of the table</text><text x="275" y="72" text-anchor="middle">[0.92, 0.97, 1.00, 0.96]</text>
+  <text x="185" y="110" text-anchor="middle" class="t-m">one stored number per (state, action)</text>
+  <text x="185" y="128" text-anchor="middle" class="t-m">never visited → empty → knows nothing</text>
+
+  <line x1="380" y1="10" x2="380" y2="190" class="lnd"/>
+
+  <text x="575" y="20" text-anchor="middle" class="t-h t-a">Q-NETWORK (DQN)</text>
+  <rect x="400" y="34" width="120" height="46" rx="5" class="bx"/><text x="460" y="54" text-anchor="middle">[0.02, −0.1,</text><text x="460" y="71" text-anchor="middle"> 0.05, 0.3]</text>
+  <line x1="520" y1="57" x2="568" y2="57" class="ln" marker-end="url(#b1)"/>
+  <rect x="570" y="30" width="80" height="54" rx="5" class="bxg"/><text x="610" y="62" text-anchor="middle" font-weight="700">network</text>
+  <line x1="650" y1="57" x2="688" y2="57" class="ln" marker-end="url(#b1)"/>
+  <text x="725" y="52" text-anchor="middle">Q(left)</text><text x="725" y="70" text-anchor="middle">Q(right)</text>
+  <text x="575" y="110" text-anchor="middle" class="t-m">a FORMULA with adjustable weights</text>
+  <text x="575" y="128" text-anchor="middle" class="t-m">new state → still gives a sensible guess</text>
+  <text x="575" y="146" text-anchor="middle" class="t-m">(similar states → similar answers)</text>
+</svg>
+<figcaption>A Q-table <i>remembers</i>; a Q-network <i>calculates</i>. That's what "function approximation" means.</figcaption>
+</figure>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p><b>DQN</b> is Q-learning where the Q-table is replaced by a neural network: you feed in the state's numbers and it outputs one Q-value per action. It learns by shrinking the gap between its guess and the same Bellman target, <code>r + γ·max Q(s2)</code>, and it needs two tricks (a <b>replay buffer</b> and a <b>target network</b>) to stay stable.</p>
+</div>
+
+<p>This is the method DeepMind used in 2015 to learn to play 49 Atari games from screen pixels, many at a human level, with one algorithm and the same settings for every game (published in <i>Nature</i>). It was the start of "deep reinforcement learning".</p>
+
+<!-- ═══════════ 02 ═══════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<p class="sub">New words for this booklet.</p>
+
+<table class="long">
+<tr><th style="width:24%">Term</th><th>Meaning in plain words</th><th style="width:27%">In your code</th></tr>
+<tr><td><b>Function approximation</b></td><td>Instead of storing a number for every state, use a formula with adjustable knobs that calculates it.</td><td><code>QNetwork</code></td></tr>
+<tr><td><b>Neural network</b></td><td>A formula made of layers: multiply by weights, add a bias, apply a simple bend (ReLU), repeat.</td><td><code>nn.Sequential(...)</code></td></tr>
+<tr><td><b>Weights, biases</b> (θ)</td><td>The knobs of the network. Learning = adjusting them. θ (theta) is the name for all of them together.</td><td><code>nn.Linear</code></td></tr>
+<tr><td><b>Layer</b></td><td>One "multiply by weights + add bias" step: a matrix times a vector.</td><td><code>nn.Linear(4, 64)</code></td></tr>
+<tr><td><b>ReLU</b></td><td>"Keep positive numbers, turn negatives into 0." Without it, stacked layers would just be one big multiplication.</td><td><code>nn.ReLU()</code></td></tr>
+<tr><td><b>Forward pass</b></td><td>Feeding a state through the network to get Q-values.</td><td><code>net(states)</code></td></tr>
+<tr><td><b>Loss</b></td><td>A single number for "how wrong": here (target − Q)².</td><td><code>loss_fn(q_taken, target)</code></td></tr>
+<tr><td><b>Gradient</b></td><td>For each weight: "if I increase this weight a tiny bit, how much does the loss change?" It's a derivative.</td><td><code>loss.backward()</code></td></tr>
+<tr><td><b>Backpropagation</b></td><td>Computing all those derivatives with the chain rule, from the output back to the input.</td><td><code>loss.backward()</code></td></tr>
+<tr><td><b>Gradient descent</b></td><td>Move every weight a little in the direction that lowers the loss.</td><td><code>optimizer.step()</code></td></tr>
+<tr><td><b>Learning rate</b></td><td>How big that step is (plays the role of α). Our optimiser is <b>Adam</b>, a smarter gradient descent.</td><td><code>lr=5e-4</code>, <code>Adam</code></td></tr>
+<tr><td><b>Batch</b></td><td>A group of moves learned from together (here 64), averaging their losses.</td><td><code>batch_size=64</code></td></tr>
+<tr><td><b>Replay buffer</b></td><td>A notebook of past moves (s, a, r, s2, ended). Training samples a random page mix.</td><td><code>ReplayBuffer</code></td></tr>
+<tr><td><b>Target network</b></td><td>A frozen copy of the network, used only to compute targets; refreshed every 500 steps.</td><td><code>target_net</code></td></tr>
+<tr><td><b>Double DQN</b></td><td>Online net picks the best next action, target net says how good it is. Fixes over-optimism.</td><td><code>double=True</code></td></tr>
+<tr><td><b>Overestimation</b></td><td>Taking the max of noisy guesses gives a number that's too high on average.</td><td><code>hand_example.py</code> part 5</td></tr>
+<tr><td><b>Huber loss</b></td><td>Like squared error for small mistakes, but grows only linearly for big ones, so one huge error can't cause a huge jump.</td><td><code>nn.SmoothL1Loss()</code></td></tr>
+<tr><td><b>Generalisation</b></td><td>Learning about one state also changes the answers for similar states.</td><td>Q(left) moved in part 4</td></tr>
+</table>
+
+<!-- ═══════════ 03 ═══════════ -->
+<h2><span class="n">03</span>Intuition: memorise vs understand</h2>
+<p class="sub">A Q-table memorises answers. A network learns a rule.</p>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">Student A: memorises (Q-table)</span>
+<p>Writes down the answer to every exam question ever seen. Perfect on repeats. A new question? Blank page.</p></div>
+<div class="box ok" style="margin:0"><span class="tag">Student B: understands (network)</span>
+<p>Learns the <i>method</i> behind the answers. A new question similar to old ones? A sensible answer. Sometimes wrong, but never blank.</p></div>
+</div>
+
+<h3>CartPole, the game for this booklet</h3>
+<pre>
+              |          pole: keep it upright
+              |
+          ____|____
+         |  cart   |  ← push left (action 0)   push right (action 1) →
+   ======O=========O======    track
+
+state  = [cart position, cart speed, pole angle, pole spin]      (4 real numbers)
+reward = +1 for every step the pole stays up
+ends   = pole tilts past ~12°, or cart leaves the track (terminated)
+         or 500 steps reached: a perfect game (truncated)
+</pre>
+<p>A human solution is easy to say: <b>"if the pole leans right, push the cart right"</b>, like balancing a stick on your palm. That rule depends on the angle and spin, not on memorising exact numbers. A network can discover exactly this kind of rule.</p>
+
+<h3>The key idea: similar states, similar answers</h3>
+<p>Angles of 0.050 and 0.051 radians are basically the same situation. A table treats them as strangers. A network gives them almost the same Q-values automatically. So every experience teaches it about <b>many</b> states at once. That's also part of the answer to "how can the agent know about states it never visited?": by similarity.</p>
+
+<!-- ═══════════ 04 ═══════════ -->
+<h2><span class="n">04</span>Maths I: a neural network by hand</h2>
+<p class="sub">Real output of <code>python hand_example.py</code>. The maths: dot products and matrix multiplication.</p>
+
+<p>A tiny network: <b>2 inputs → 2 hidden neurons (ReLU) → 2 outputs</b>. The real CartPole network is the same thing, just bigger (4 → 64 → 64 → 2).</p>
+
+<figure>
+<svg viewBox="0 0 760 210" role="img" aria-label="Tiny network with 2 inputs, 2 hidden neurons, 2 outputs">
+  <circle cx="110" cy="65" r="26" class="bx"/><text x="110" y="70" text-anchor="middle">s1 = 1</text>
+  <circle cx="110" cy="150" r="26" class="bx"/><text x="110" y="155" text-anchor="middle">s2 = 2</text>
+  <circle cx="380" cy="65" r="26" class="bxa"/><text x="380" y="70" text-anchor="middle">h1</text>
+  <circle cx="380" cy="150" r="26" class="bxa"/><text x="380" y="155" text-anchor="middle">h2</text>
+  <circle cx="650" cy="65" r="30" class="bxg"/><text x="650" y="62" text-anchor="middle" font-size="11">Q(left)</text><text x="650" y="77" text-anchor="middle" font-weight="700">0.10</text>
+  <circle cx="650" cy="150" r="30" class="bxg"/><text x="650" y="147" text-anchor="middle" font-size="11">Q(right)</text><text x="650" y="162" text-anchor="middle" font-weight="700">0.50</text>
+  <line x1="136" y1="65" x2="354" y2="65" class="ln"/><line x1="136" y1="150" x2="354" y2="150" class="ln"/>
+  <line x1="136" y1="70" x2="354" y2="145" class="ln"/><line x1="136" y1="145" x2="354" y2="70" class="ln"/>
+  <line x1="406" y1="65" x2="620" y2="65" class="ln"/><line x1="406" y1="150" x2="620" y2="150" class="ln"/>
+  <line x1="406" y1="70" x2="620" y2="145" class="ln"/><line x1="406" y1="145" x2="620" y2="70" class="ln"/>
+  <text x="245" y="200" text-anchor="middle" class="t-m">weights W1, biases b1, then ReLU</text>
+  <text x="515" y="200" text-anchor="middle" class="t-m">weights W2, biases b2</text>
+</svg>
+<figcaption>Each line is a weight. Each neuron adds up "input × weight" (a dot product) plus a bias.</figcaption>
+</figure>
+
+<h3>The numbers</h3>
+<pre>
+s  = [1, 2]
+W1 = [[0.5, −0.2],     b1 = [0.1, −0.4]          W2 = [[1.0, −1.0],     b2 = [0.0, 0.2]
+      [0.3,  0.1]]                                     [0.5,  2.0]]
+</pre>
+
+<h3>Step 1: hidden layer = matrix × vector + bias</h3>
+<pre>
+z1 = 0.5×1 + (−0.2)×2 + 0.1 = 0.20         ← row 1 of W1 · s  (a dot product) + bias
+z2 = 0.3×1 + 0.1×2 − 0.4    = 0.10         ← row 2 of W1 · s + bias
+ReLU: h1 = max(0, 0.20) = 0.20    h2 = max(0, 0.10) = 0.10
+</pre>
+
+<h3>Step 2: output layer</h3>
+<pre>
+Q(left)  = 1.0×0.20 + (−1.0)×0.10 + 0.0 = <b>0.10</b>
+Q(right) = 0.5×0.20 + 2.0×0.10 + 0.2    = <b>0.50</b>     → the network prefers RIGHT
+</pre>
+<p>That's all a forward pass is: <b>W1·s + b1 → ReLU → W2·h + b2</b>. In matrix form, "W1 · s" is the matrix multiplication from school: each row of W1 dotted with the vector s.</p>
+
+<div class="box plain"><span class="tag">How big is the real one?</span>
+<p>CartPole's network: 4 → 64 → 64 → 2. Weights: 4×64 + 64×64 + 64×2 = 4,480, plus 64 + 64 + 2 = 130 biases → <b>4,610 knobs</b>. It covers infinitely many states with 4,610 numbers. Taxi's table needed 3,000 numbers for just 500 states.</p>
+</div>
+
+<!-- ═══════════ 05 ═══════════ -->
+<h2><span class="n">05</span>Maths II: loss, gradient, backprop</h2>
+<p class="sub">How the network learns from one move. The maths: squaring, derivatives and the chain rule.</p>
+
+<h3>From "nudge the table" to "shrink the loss"</h3>
+<pre style="font-size:9.6pt">
+Tabular Q-learning (project 3):   Q[s,a]  ←  Q[s,a] + α · (target − Q[s,a])
+DQN:                              change the WEIGHTS θ so that  Q<sub>θ</sub>(s,a)  moves toward the target
+
+    loss  L(θ)  =  ( target  −  Q<sub>θ</sub>(s, a) )²         target = r + γ · max<sub>a′</sub> Q<sub>target net</sub>(s2, a′)
+                     ▲ fixed number   ▲ depends on θ           (0 future if the game ENDED)
+</pre>
+
+<h3>The loss for one move (real numbers)</h3>
+<pre>
+took RIGHT, r = 1.0, best Q in s2 (from the target net) = 1.0,  γ = 0.9
+target = 1.0 + 0.9 × 1.0 = 1.90
+loss   = (1.90 − 0.50)² = 1.9600
+</pre>
+
+<h3>Backprop = the chain rule, one link at a time</h3>
+<p>The loss depends on Q(right), which depends on the hidden values h, which depend on the first-layer weights. To know how one weight affects the loss, multiply the links of that chain:</p>
+<pre>
+dL/dQ          = −2 × (target − Q)            = −2 × 1.40       = −2.80
+
+dL/dW2[right,1] = dL/dQ × dQ/dW2[right,1]     = −2.80 × h1(0.20) = −0.560
+dL/dW2[right,2] = dL/dQ × h2                  = −2.80 × 0.10     = −0.280
+
+dL/dh1          = dL/dQ × W2[right,1]          = −2.80 × 0.5      = −1.400
+ReLU's derivative: 1 if z > 0, else 0.   z1 = 0.20 > 0 → passes
+dL/dW1[1,1]     = dL/dz1 × s1                  = −1.400 × 1.0     = −1.400
+</pre>
+<p>A negative derivative means "increase this weight and the loss goes <b>down</b>". So gradient descent increases these weights.</p>
+
+<h3>One gradient-descent step (learning rate 0.01, all weights updated)</h3>
+<pre>
+every weight:   w  ←  w − 0.01 × dL/dw
+
+Q(s, right): 0.500 → 1.245    (target 1.90)   new loss 0.4293 (was 1.9600)
+Q(s, left):  0.100 → −0.152   ← it also changed, though we only trained "right"!
+</pre>
+<div class="box warn"><span class="tag">Generalisation is a double-edged sword</span>
+<p>Q(left) moved because both outputs share the hidden layer. That's the <b>good</b> side (learning spreads to related states and actions) and the <b>risky</b> side (fixing one answer can disturb others). A Q-table never had this problem: changing Q[14, right] left everything else alone. Chapter 06 is about taming this.</p>
+</div>
+
+<!-- ═══════════ 06 ═══════════ -->
+<h2><span class="n">06</span>Why the simple version breaks</h2>
+<p class="sub">"Q-learning + a neural network" sounds easy. Done naively, it often fails. Three problems, three fixes.</p>
+
+<h3>Problem 1: consecutive moves are too similar</h3>
+<p>In CartPole, step 101 looks almost exactly like step 100. Training on moves in order is like studying 200 questions about one chapter, then 200 about the next: the network over-fits to "now" and forgets the rest.</p>
+<p><b>Fix: the replay buffer.</b> Store every move (s, a, r, s2, ended) in a notebook of up to 50,000 moves. Each training step, learn from a <b>random batch of 64 old moves</b>. Bonus: every move gets reused many times instead of once.</p>
+
+<h3>Problem 2: the target moves while you chase it</h3>
+<p>The target r + γ·max Q(s2) is computed by the same network you are changing. Each update moves Q(s2) too, so the target runs away: like a dog chasing its own tail.</p>
+<p><b>Fix: the target network.</b> Keep a <b>frozen copy</b> of the network for computing targets, and copy the online weights into it only every 500 steps. For 500 steps the target stands still, so the online network can actually reach it.</p>
+
+<figure>
+<svg viewBox="0 0 760 200" role="img" aria-label="DQN data flow: environment to replay buffer, batch to online net, target net computes targets">
+  <defs><marker id="b6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="150" height="56" rx="5" class="bx"/><text x="95" y="44" text-anchor="middle" font-weight="700">CartPole</text><text x="95" y="63" text-anchor="middle" class="t-m">env.step(a)</text>
+  <line x1="170" y1="48" x2="258" y2="48" class="ln" marker-end="url(#b6)"/><text x="214" y="40" text-anchor="middle" class="t-m">store move</text>
+  <rect x="260" y="20" width="180" height="56" rx="5" class="bxa"/><text x="350" y="44" text-anchor="middle" font-weight="700">Replay buffer</text><text x="350" y="63" text-anchor="middle" class="t-m">last 50,000 moves</text>
+  <line x1="440" y1="48" x2="538" y2="48" class="ln" marker-end="url(#b6)"/><text x="489" y="40" text-anchor="middle" class="t-m">random 64</text>
+  <rect x="540" y="20" width="200" height="56" rx="5" class="bxg"/><text x="640" y="44" text-anchor="middle" font-weight="700">Online network</text><text x="640" y="63" text-anchor="middle" class="t-m">trained every step</text>
+  <rect x="540" y="130" width="200" height="56" rx="5" class="bx"/><text x="640" y="154" text-anchor="middle" font-weight="700">Target network</text><text x="640" y="173" text-anchor="middle" class="t-m">frozen copy</text>
+  <path d="M700,76 V128" class="lnd" marker-end="url(#b6)"/><text x="708" y="106" class="t-m">copy every 500</text>
+  <path d="M580,130 V78" class="ln" marker-end="url(#b6)"/><text x="470" y="106" class="t-m">targets r + γ·max Q(s2)</text>
+  <path d="M540,62 H480 V150 H95 V78" class="ln" marker-end="url(#b6)"/><text x="300" y="144" text-anchor="middle" class="t-m">chooses actions (ε-greedy)</text>
+</svg>
+<figcaption>The online network chooses actions and learns. The target network only supplies targets and is refreshed every 500 steps.</figcaption>
+</figure>
+
+<h3>Problem 3: max is over-optimistic</h3>
+<p>The network's Q-values are noisy guesses. Taking the max of noisy guesses picks whichever one happens to be <b>too high</b>. Real output of <code>hand_example.py</code> part 5 (4 actions, all truly worth 0, noise of size 1):</p>
+<pre>
+average of ONE estimate:                                       +0.004   (fine)
+average of the MAX of the 4 estimates:                         +1.031   ← too high!
+Double trick: pick with one estimate, value with another one:  +0.008   (fine again)
+</pre>
+<p>And the error feeds itself: the too-high max becomes the target, the next max is even higher… <b>Fix: Double DQN.</b> Let the online net <b>choose</b> the best next action, but let the target net <b>score</b> it. Two different noisy estimates rarely agree on the same lucky mistake.</p>
+<pre>
+DQN:         target = r + γ · max<sub>a′</sub> Q<sub>target</sub>(s2, a′)
+Double DQN:  a* = argmax<sub>a′</sub> Q<sub>online</sub>(s2, a′),    target = r + γ · Q<sub>target</sub>(s2, a*)
+</pre>
+
+<!-- ═══════════ 07 ═══════════ -->
+<h2><span class="n">07</span>The algorithm</h2>
+<p class="sub">Steps 1–3 are exactly project 3. Steps 4–7 replace the one-line table update.</p>
+
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="DQN step loop">
+  <defs><marker id="b7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="220" height="60" rx="5" class="bx"/><text x="130" y="44" text-anchor="middle" font-weight="700">1 · CHOOSE</text><text x="130" y="64" text-anchor="middle" class="t-m">ε-greedy on online net</text>
+  <line x1="240" y1="50" x2="268" y2="50" class="ln" marker-end="url(#b7)"/>
+  <rect x="270" y="20" width="220" height="60" rx="5" class="bx"/><text x="380" y="44" text-anchor="middle" font-weight="700">2 · ACT + SEE</text><text x="380" y="64" text-anchor="middle" class="t-m">env.step(a) → s2, r, ended</text>
+  <line x1="490" y1="50" x2="518" y2="50" class="ln" marker-end="url(#b7)"/>
+  <rect x="520" y="20" width="220" height="60" rx="5" class="bxa"/><text x="630" y="44" text-anchor="middle" font-weight="700">3 · STORE</text><text x="630" y="64" text-anchor="middle">add move to replay buffer</text>
+  <line x1="630" y1="80" x2="630" y2="148" class="ln" marker-end="url(#b7)"/>
+  <rect x="520" y="150" width="220" height="60" rx="5" class="bxa"/><text x="630" y="174" text-anchor="middle" font-weight="700">4 · SAMPLE + TARGETS</text><text x="630" y="194" text-anchor="middle">64 old moves; target net</text>
+  <line x1="520" y1="180" x2="492" y2="180" class="ln" marker-end="url(#b7)"/>
+  <rect x="270" y="150" width="220" height="60" rx="5" class="bx"/><text x="380" y="174" text-anchor="middle" font-weight="700">5 · LOSS</text><text x="380" y="194" text-anchor="middle">Huber(Q(s,a), target)</text>
+  <line x1="270" y1="180" x2="242" y2="180" class="ln" marker-end="url(#b7)"/>
+  <rect x="20" y="150" width="220" height="60" rx="5" class="bxg"/><text x="130" y="174" text-anchor="middle" font-weight="700">6 · BACKPROP + STEP</text><text x="130" y="194" text-anchor="middle">nudge all 4,610 weights</text>
+  <line x1="130" y1="150" x2="130" y2="82" class="ln" marker-end="url(#b7)"/><text x="138" y="118" class="t-m">7 · every 500 steps: copy online → target</text>
+</svg>
+<figcaption>One loop = one environment step plus one learning step on a random batch.</figcaption>
+</figure>
+
+<h3>Pseudocode</h3>
+<pre>
+online = new network;  target = copy(online);  buffer = empty;  ε = 1.0
+s = reset()
+for step = 1 … 50,000:
+    a = random action with probability ε, else argmax online(s)
+    s2, r, ended = step(a);   buffer.add(s, a, r, s2, ended);   s = s2 (or reset if over)
+    ε = max(0.05, ε × 0.9995)
+    if step ≥ 1,000:                                   # collect some moves first
+        batch = 64 random moves from buffer
+        y = r + γ · max<sub>a′</sub> target(s2)[a′] · (1 − ended)      # no gradient through y
+        loss = Huber(online(s)[a], y)
+        loss.backward();  optimizer.step()             # backprop + gradient descent
+    if step % 500 == 0:  target = copy(online)
+</pre>
+
+<!-- ═══════════ 08 ═══════════ -->
+<h2><span class="n">08</span>The code, line by line</h2>
+<p class="sub"><code>dqn.py</code>, the library used by every script.</p>
+
+<h3>① The network</h3>
+<pre><span class="k">class</span> QNetwork(nn.Module):
+    <span class="k">def</span> __init__(self, n_inputs, n_actions, hidden=64):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(n_inputs, hidden), nn.ReLU(),   <span class="c"># layer 1: W1·s + b1, then ReLU</span>
+            nn.Linear(hidden, hidden), nn.ReLU(),     <span class="c"># layer 2</span>
+            nn.Linear(hidden, n_actions),             <span class="c"># output: Q(s, left), Q(s, right)</span>
+        )</pre>
+
+<h3>② The replay buffer</h3>
+<pre><span class="k">class</span> ReplayBuffer:
+    <span class="k">def</span> __init__(self, capacity):
+        self.memory = deque(maxlen=capacity)          <span class="c"># old pages fall out when full</span>
+    <span class="k">def</span> add(self, s, a, r, s2, terminated):
+        self.memory.append((s, a, r, s2, terminated))
+    <span class="k">def</span> sample(self, batch_size):
+        batch = random.sample(self.memory, batch_size)  <span class="c"># a RANDOM mix of old moves</span>
+        <span class="k">return</span> to_tensors(batch)</pre>
+
+<h3>③ The Bellman target (plain or Double)</h3>
+<pre><span class="k">def</span> compute_targets(online, target_net, r, s2, term, gamma, double):
+    <span class="k">with</span> torch.no_grad():                           <span class="c"># targets are NOT trained</span>
+        <span class="k">if</span> double:
+            best_a = online(s2).argmax(dim=1, keepdim=True)        <span class="c"># online net CHOOSES</span>
+            q_next = target_net(s2).gather(1, best_a).squeeze(1)   <span class="c"># target net SCORES</span>
+        <span class="k">else</span>:
+            q_next = target_net(s2).max(dim=1).values              <span class="c"># plain DQN</span>
+        <span class="k">return</span> <span class="h">r + gamma * q_next * (1 - term)</span>                 <span class="c"># your old target line!</span></pre>
+
+<h3>④ The learning step inside <code>train()</code></h3>
+<pre>bs, ba, br, bs2, bterm = buffer.sample(batch_size)              <span class="c"># 64 random OLD moves</span>
+q_taken = online(bs).gather(1, ba.unsqueeze(1)).squeeze(1)       <span class="c"># Q(s, a) for the action taken</span>
+target = compute_targets(online, target_net, br, bs2, bterm, gamma, double)
+loss = loss_fn(q_taken, target)                                  <span class="c"># how wrong were we?</span>
+optimizer.zero_grad()
+loss.backward()                                                  <span class="c"># backprop: chain rule, done for us</span>
+nn.utils.clip_grad_norm_(online.parameters(), 10.0)              <span class="c"># safety: limit huge gradients</span>
+optimizer.step()                                                 <span class="c"># gradient descent: nudge every weight</span>
+...
+<span class="k">elif</span> use_target <span class="k">and</span> step % target_every == 0:
+    target_net.load_state_dict(online.state_dict())              <span class="c"># refresh the frozen copy</span></pre>
+
+<table>
+<tr><th style="width:32%">Line</th><th>Meaning</th></tr>
+<tr><td><code>online(bs).gather(1, ba…)</code></td><td>The network outputs both Q-values for each of the 64 states; <code>gather</code> picks the one for the action actually taken. Only that one is trained, like <code>Q[s, a]</code> in project 3.</td></tr>
+<tr><td><code>torch.no_grad()</code></td><td>The target is treated as a fixed number. We don't adjust weights to move the target toward Q, only Q toward the target.</td></tr>
+<tr><td><code>(1 - term)</code></td><td>Same as project 3's <code>(not terminated)</code>: pole fell → no future. Hitting 500 steps is <i>truncated</i>, so the future still counts.</td></tr>
+<tr><td><code>loss.backward()</code></td><td>PyTorch does all of chapter 05's chain-rule work for 4,610 weights automatically.</td></tr>
+<tr><td><code>optimizer.step()</code></td><td>Adam's gradient-descent step, learning rate 0.0005.</td></tr>
+<tr><td><code>eps * eps_decay</code> (per step)</td><td>ε falls from 1.0 to 0.05 over about 6,000 steps (0.9995<sup>6000</sup> ≈ 0.05).</td></tr>
+<tr><td>best-network copy</td><td>Every 2,500 steps the code tests the network with no exploration and keeps the best version. DQN's score can drop later (chapter 09), so we keep the best.</td></tr>
+</table>
+
+<!--RESULTS-->
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>Real-world problems</h2>
+<p class="sub">DQN fits when the state is a vector (or image) of numbers and there are a few discrete actions.</p>
+
+<div class="box plain"><span class="tag">When DQN fits</span>
+<p>✔ Many or continuous <b>states</b>. ✔ A small set of <b>discrete actions</b> (you need max over actions). ✔ A simulator or lots of logged data (DQN is off-policy, like Q-learning). ✘ <b>Continuous actions</b> (a steering angle, a motor torque): you can't take max over infinitely many actions. Use booklet 07 (DDPG/SAC) or PPO instead.</p>
+</div>
+
+<h3>1 · Atari games from pixels (well documented)</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>the last 4 screen frames (84×84 grey pixels), so the network can see motion</td></tr>
+<tr><td><b>Action</b></td><td>joystick moves: up to 18 discrete choices</td></tr>
+<tr><td><b>Reward</b></td><td>change in game score (clipped to −1/0/+1)</td></tr>
+<tr><td><b>What changes from CartPole</b></td><td>The network starts with <b>convolutional layers</b> (pattern detectors for images). Everything else is the DQN you just learned: replay buffer, target network, ε-greedy. DeepMind's 2015 Nature paper used this setup on 49 games.</td></tr>
+</table>
+
+<h3>2 · Data-centre cooling or a building's AC</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>vector of temperatures, power use, outside weather, time of day</td></tr>
+<tr><td><b>Action</b></td><td>a few discrete settings: fan speed levels, chiller on/off</td></tr>
+<tr><td><b>Reward</b></td><td>−energy cost − big penalty if any temperature goes over the safe limit</td></tr>
+<tr><td><b>Why DQN</b></td><td>Continuous sensor readings (no table possible), few discrete actions, and years of logged data to train off-policy. DeepMind reported cutting cooling energy at Google data centres using machine learning; treat the exact method as "deep RL-style control", and our formulation as a simplified version.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Safety: never let the learning agent act unsupervised at first. Use safety limits and human override.</td></tr>
+</table>
+
+<h3>3 · Which offer to show a shopper next</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>user features: recent clicks, time on site, basket value, device</td></tr>
+<tr><td><b>Action</b></td><td>one of 10 offers (or "no offer")</td></tr>
+<tr><td><b>Reward</b></td><td>+profit if they buy in the session, small −cost of a discount</td></tr>
+<tr><td><b>Why DQN</b></td><td>It values long-term effects (an offer now may cause a purchase three pages later), unlike a one-step bandit. It could be used for this; real systems combine it with careful offline evaluation.</td></tr>
+<tr><td><b>Pitfall</b></td><td>The logged data came from the old policy: Q-values for rarely shown offers are unreliable (the overestimation problem in real life).</td></tr>
+</table>
+
+<!-- ═══════════ 12 ═══════════ -->
+<h2><span class="n">12</span>Side by side</h2>
+<table class="long">
+<tr><th style="width:22%"></th><th>Tabular Q-learning</th><th>DQN</th><th>Double DQN</th></tr>
+<tr><td>Stores Q as</td><td>a table: one number per (s, a)</td><td>a network: 4,610 weights for any state</td><td>same as DQN</td></tr>
+<tr><td>States it can handle</td><td>small, discrete</td><td><b>huge or continuous</b> (vectors, images)</td><td>same</td></tr>
+<tr><td>Actions</td><td>discrete</td><td>discrete (needs max)</td><td>discrete</td></tr>
+<tr><td>Target</td><td>r + γ max Q[s2]</td><td>r + γ max Q<sub>target</sub>(s2)</td><td>r + γ Q<sub>target</sub>(s2, argmax Q<sub>online</sub>)</td></tr>
+<tr><td>Update</td><td>Q += α(target − Q)</td><td>gradient step on (target − Q)²</td><td>same</td></tr>
+<tr><td>Learns from</td><td>the move just made</td><td><b>random batches of old moves</b></td><td>same</td></tr>
+<tr><td>Unvisited states</td><td>know nothing</td><td><b>guess from similar states</b></td><td>same</td></tr>
+<tr><td>Over-optimism</td><td>mild</td><td>can be large</td><td><b>reduced</b></td></tr>
+<tr><td>Stability</td><td>very stable</td><td>needs replay + target net</td><td>a bit more stable</td></tr>
+<tr><td>Compared with PPO (booklet 06)</td><td colspan="3">PPO learns action probabilities directly, works with continuous actions, is on-policy (needs fresh data). DQN reuses old data (more sample-efficient) but only for discrete actions.</td></tr>
+</table>
+
+<!-- ═══════════ 13 ═══════════ -->
+<h2><span class="n">13</span>Clearing up the confusions</h2>
+
+<div class="qa"><div class="q">Is the Bellman target different in DQN?</div><p>No. Still r + γ·max Q(s2), with no future if the game ended. Only <i>who</i> computes it (the frozen target network) and <i>how</i> Q moves toward it (gradient descent) change.</p></div>
+<div class="qa"><div class="q">What does the network output: an action, a probability or a value?</div><p><b>Values</b>: one Q-number per action. The action is chosen by argmax (or randomly with ε). It does not output probabilities; that's what policy methods (booklet 04) do.</p></div>
+<div class="qa"><div class="q">Which state's Q gets trained?</div><p>Q(s, a) for the state you <b>left</b> and the action you took, for 64 old moves at once. Q(s2) is only read (from the target network), exactly like project 3.</p></div>
+<div class="qa"><div class="q">If I train Q(s, right), why does Q(s, left) change too?</div><p>Both outputs share the hidden layers. Changing shared weights moves every output a bit. Part 4 of the hand example: Q(left) went 0.100 → −0.152.</p></div>
+<div class="qa"><div class="q">How can it know a state it has never seen?</div><p>It can't <i>know</i>, but it can <b>guess well</b>: a new state with similar numbers produces similar outputs. That's generalisation. A table can't do this at all.</p></div>
+<div class="qa"><div class="q">Why learn from old moves? Aren't they outdated?</div><p>The Bellman target only needs (s, a, r, s2): what the world did. That stays true no matter which policy chose the action. That's why off-policy methods can use a replay buffer. On-policy methods like SARSA or PPO can't, at least not directly.</p></div>
+<div class="qa"><div class="q">Why does the loss not go steadily down?</div><p>The targets keep changing: every 500 steps the target network is refreshed, and as the agent gets better it reaches new states with new targets. The loss is not a scoreboard in RL; the game score is.</p></div>
+<div class="qa"><div class="q">Why is the largest Q about 100 in CartPole?</div><p>Reward +1 per step and γ = 0.99: 1 + 0.99 + 0.99² + … = 1/(1 − 0.99) = 100. A Q-value far above 100 is over-optimism.</p></div>
+<div class="qa"><div class="q">Is "deep" just "many layers"?</div><p>Yes, "deep" means a neural network with more than one hidden layer. Our network has two hidden layers of 64.</p></div>
+<div class="qa"><div class="q">Can DQN steer a car with any angle between −30° and +30°?</div><p>Not directly: it needs max over actions, and infinitely many angles can't be listed. You could chop the angle into, say, 7 options, but continuous methods (DDPG, SAC, PPO) are the proper tool.</p></div>
+<div class="qa"><div class="q">Why does the score sometimes collapse after reaching 500?</div><p>A known DQN weakness ("catastrophic forgetting"): once it plays well, the buffer fills with "good" states, it forgets what bad states look like, and Q-values drift. That's why the code keeps the best network seen.</p></div>
+
+<!-- ═══════════ 14 ═══════════ -->
+<h2><span class="n">14</span>Practice problems</h2>
+<ol>
+<li><b>Forward pass.</b> Using the tiny network from chapter 04, compute Q(left) and Q(right) for s = [2, 0].</li>
+<li><b>ReLU.</b> In problem 1, which hidden neuron is switched off (output 0), if any?</li>
+<li><b>Target.</b> r = 1, γ = 0.99, the target network gives Q(s2) = [40, 55], the game did not end. Target? What if the pole fell (terminated)?</li>
+<li><b>Loss and derivative.</b> Q(s, a) = 50, target = 55.45. Compute the squared loss and dL/dQ.</li>
+<li><b>Counting knobs.</b> How many weights and biases does a 6 → 32 → 32 → 3 network have (Acrobot)?</li>
+<li><b>Double DQN.</b> Online net on s2: [10, 12]. Target net on s2: [11, 9]. r = 0, γ = 0.9. Compute the DQN target and the Double DQN target.</li>
+<li><b>Largest Q.</b> Reward +1 per step, γ = 0.95. What is the largest possible Q? If the network outputs 80, what does that tell you?</li>
+<li><b>ε schedule.</b> ε starts at 1.0 and is multiplied by 0.9995 every step. Roughly when does it reach 0.05? (Hint: ln 0.05 ≈ −3.0, ln 0.9995 ≈ −0.0005.)</li>
+<li><b>Conceptual.</b> Why does the replay buffer let DQN use far fewer games than learning from each move once?</li>
+<li><b>Conceptual.</b> Your boss wants DQN to set a price anywhere between ₹100 and ₹500. What do you tell them?</li>
+<li><b>Coding.</b> Run <code>python cartpole_dqn.py --steps 20000</code>. Is 20,000 steps enough? Compare with the 50,000-step run.</li>
+<li><b>Coding.</b> In <code>dqn.py</code>, change <code>target_every</code> from 500 to 50. Predict what happens, then run <code>ablations.py</code> with only the "full DQN" variant.</li>
+</ol>
+
+<!-- ═══════════ 15 ═══════════ -->
+<h2><span class="n">15</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\03_dqn
+python hand_example.py           <span class="c"># the tiny network, by hand: forward, loss, backprop, max bias   (1 s)</span>
+python cartpole_dqn.py           <span class="c"># train DQN on CartPole, Q-values for chosen states            (~3 min)</span>
+python ablations.py              <span class="c"># switch off replay / target net, try Double DQN               (~15 min)</span>
+<span class="c"># add --no-show to save the charts without opening windows</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">DQN in 10 lines</span>
+<pre style="background:#fff;margin:6px 0">online, target = net, copy(net)
+for every step:
+  a = ε-greedy(online(s))
+  s2, r, end = step(a); store it
+  batch = 64 random stored moves
+  y = r + γ·max target(s2)·(1−end)
+  loss = Huber(online(s)[a], y)
+  backprop; gradient step
+  every 500 steps: target = online
+  shrink ε</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">Key formulas</span>
+<pre style="background:#fff;margin:6px 0">Layer:    h = ReLU(W·s + b)
+Loss:     L = (y − Q(s,a))²
+Gradient: w ← w − lr · dL/dw
+Chain:    dL/dw = dL/dQ · dQ/dh · dh/dw
+DQN y:    r + γ max Q_tgt(s2)
+Double y: r + γ Q_tgt(s2, argmax Q_onl)
+Max Q:    1/(1−γ) for reward 1/step</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>DQN replaces the Q-table with a neural network that calculates Q-values from the state's numbers, so it works with huge or continuous state spaces.</li>
+<li>The target is still r + γ·max Q(s2); the network moves toward it by gradient descent on the squared error (backprop = chain rule).</li>
+<li>A replay buffer (random old moves) and a target network (a frozen copy) are what make it stable.</li>
+<li>max over noisy guesses is too optimistic; Double DQN lets one network choose and the other score.</li>
+</ol>
+</div>
+
+<!-- ═══════════ 16 ═══════════ -->
+<h2><span class="n">16</span>Answers</h2>
+<ol>
+<li>z1 = 0.5×2 + (−0.2)×0 + 0.1 = 1.1; z2 = 0.3×2 + 0.1×0 − 0.4 = 0.2. h = [1.1, 0.2]. Q(left) = 1.1 − 0.2 + 0 = <b>0.9</b>; Q(right) = 0.55 + 0.4 + 0.2 = <b>1.15</b>.</li>
+<li>Neither: both z are positive. (If a z were negative, ReLU would output 0 and that neuron would pass no gradient back.)</li>
+<li>Target = 1 + 0.99 × 55 = <b>55.45</b>. Terminated: target = <b>1</b> (no future).</li>
+<li>Loss = (55.45 − 50)² = 5.45² = <b>29.70</b>. dL/dQ = −2 × 5.45 = <b>−10.9</b> (negative, so gradient descent pushes Q up).</li>
+<li>Weights: 6×32 + 32×32 + 32×3 = 192 + 1024 + 96 = 1,312. Biases: 32 + 32 + 3 = 67. Total <b>1,379</b>.</li>
+<li>DQN: max of target net = 11 → y = 0.9 × 11 = <b>9.9</b>. Double: online picks action 1 (12), target net scores action 1 = 9 → y = 0.9 × 9 = <b>8.1</b>. Double is less optimistic.</li>
+<li>1/(1 − 0.95) = <b>20</b>. An output of 80 is impossible for a true value: the network is badly over-estimating.</li>
+<li>Need 0.9995<sup>n</sup> = 0.05 → n = ln 0.05 / ln 0.9995 ≈ −3.0 / −0.0005 = <b>about 6,000 steps</b>.</li>
+<li>Each move is stored and re-used in many batches (on average dozens of times), and random batches mix many situations, so each environment step teaches much more.</li>
+<li>Plain DQN needs a short list of actions to take the max over. Either offer a few price levels (₹100, 150, …, 500) as discrete actions, or use a continuous-action method (DDPG, SAC, PPO).</li>
+<li>Compare the test scores printed every 2,500 steps. Fewer steps usually means a lower, less reliable score; the result depends on the seed, so run it and see.</li>
+<li>Prediction: a 10× more often refreshed target network moves closer to "no target network", so learning gets less stable. Check the test-score curve.</li>
+</ol>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RLHF Human Feedback</title>
+<!--STYLE-->
+</head>
+<body>
+<main>
+
+<!-- ═══════════ COVER ═══════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Booklet 09</div>
+  <h1>RLHF: Reinforcement<br>Learning from<br>Human Feedback</h1>
+  <p class="lede">How chat assistants are fine-tuned to be helpful: learn a reward from human comparisons, improve the model with PPO while staying close to where it started, and watch out for "reward hacking". Plus DPO, the shortcut that skips the reward model. Every number comes from a small, self-contained toy in <code>rl_topics/09_rlhf</code>.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture</div>
+    <div><span>02</span>Words you need</div>
+    <div><span>03</span>Intuition: comparing is easier than scoring</div>
+    <div><span>04</span>Recap: policy gradient and PPO</div>
+    <div><span>05</span>Our toy chat assistant + SFT</div>
+    <div><span>06</span>Maths I: Bradley–Terry, the reward model</div>
+    <div><span>07</span>Training the reward model</div>
+    <div><span>08</span>Maths II: KL, staying close to home</div>
+    <div><span>09</span>RL fine-tuning: the algorithm and code</div>
+    <div><span>10</span>Running it: the β sweep and reward hacking</div>
+    <div><span>11</span>DPO: skip the reward model</div>
+    <div><span>12</span>Real-world problems</div>
+    <div><span>13</span>Side by side</div>
+    <div><span>14</span>Clearing up the confusions</div>
+    <div><span>15</span>Practice problems</div>
+    <div><span>16</span>Run it yourself + cheat sheet</div>
+    <div><span>17</span>Answers</div>
+  </div>
+</section>
+
+<!-- ═══════════ 01 ═══════════ -->
+<h2><span class="n">01</span>The big picture</h2>
+<p class="sub">A language model is a policy. Writing a reply is an episode.</p>
+
+<p>A language model writes one word (token) at a time, choosing each from a <b>softmax over its vocabulary</b>: exactly the policies of booklets 04–06. In RL words:</p>
+<table>
+<tr><th style="width:25%">RL word</th><th>For a chat assistant</th></tr>
+<tr><td>state</td><td>the prompt + everything written so far</td></tr>
+<tr><td>action</td><td>the next word (or "stop")</td></tr>
+<tr><td>policy π(a|s)</td><td>the model's probability for each next word</td></tr>
+<tr><td>episode</td><td>one complete reply</td></tr>
+<tr><td>reward</td><td>one number for the whole reply, given only at the end: "how good was this answer?"</td></tr>
+</table>
+<p>The hard part is the reward: nobody can write a formula for "a good answer". RLHF's trick is to <b>learn the reward from people's comparisons</b>.</p>
+
+<figure>
+<svg viewBox="0 0 760 170" role="img" aria-label="Three stages: pretraining, supervised fine-tuning, RLHF with reward model and PPO">
+  <defs><marker id="g1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="10" y="30" width="170" height="90" rx="6" class="bx"/><text x="95" y="56" text-anchor="middle" font-weight="700">1 · PRETRAIN</text><text x="95" y="78" text-anchor="middle" class="t-m">predict the next word</text><text x="95" y="96" text-anchor="middle" class="t-m">on huge amounts of text</text>
+  <line x1="180" y1="75" x2="203" y2="75" class="ln" marker-end="url(#g1)"/>
+  <rect x="205" y="30" width="170" height="90" rx="6" class="bx"/><text x="290" y="56" text-anchor="middle" font-weight="700">2 · SFT</text><text x="290" y="78" text-anchor="middle" class="t-m">copy good replies</text><text x="290" y="96" text-anchor="middle" class="t-m">written by people</text>
+  <line x1="375" y1="75" x2="398" y2="75" class="ln" marker-end="url(#g1)"/>
+  <rect x="400" y="30" width="170" height="90" rx="6" class="bxa"/><text x="485" y="56" text-anchor="middle" font-weight="700">3 · REWARD MODEL</text><text x="485" y="78" text-anchor="middle" class="t-m">people compare 2 replies;</text><text x="485" y="96" text-anchor="middle" class="t-m">learn a score from it</text>
+  <line x1="570" y1="75" x2="593" y2="75" class="ln" marker-end="url(#g1)"/>
+  <rect x="595" y="30" width="155" height="90" rx="6" class="bxg"/><text x="672" y="56" text-anchor="middle" font-weight="700">4 · RL (PPO)</text><text x="672" y="78" text-anchor="middle" class="t-m">maximise the score,</text><text x="672" y="96" text-anchor="middle" class="t-m">stay close to SFT (KL)</text>
+  <text x="380" y="150" text-anchor="middle" class="t-a">stages 3 + 4 = RLHF;   DPO (chapter 11) does 3 + 4 in one step</text>
+</svg>
+<figcaption>The recipe published for InstructGPT (OpenAI, 2022). Our toy skips pretraining and does stages 2–4 for real.</figcaption>
+</figure>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p><b>RLHF</b> trains a <b>reward model</b> to predict which of two replies people prefer (Bradley–Terry), then fine-tunes the language model with <b>PPO</b> to earn high reward-model scores, while a <b>KL penalty</b> keeps it close to the original model so it can't "hack" the reward model's blind spots.</p>
+</div>
+
+<!-- ═══════════ 02 ═══════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<table class="long">
+<tr><th style="width:24%">Term</th><th>Meaning in plain words</th><th style="width:27%">In your code</th></tr>
+<tr><td><b>Token</b></td><td>One piece of text (a word or part of one). Our toy uses 10 whole words.</td><td><code>WORDS</code></td></tr>
+<tr><td><b>SFT</b> (supervised fine-tuning)</td><td>Train the model to copy example replies written by people.</td><td>stage 2 in <code>reward_model.py</code></td></tr>
+<tr><td><b>π<sub>ref</sub></b></td><td>The reference policy: the SFT model, kept frozen as the "home" to stay near.</td><td><code>theta_ref</code></td></tr>
+<tr><td><b>Preference pair</b></td><td>Two replies to the same prompt and a label: which one a person preferred.</td><td><code>collect_comparisons()</code></td></tr>
+<tr><td><b>Reward model</b> (RM)</td><td>A model that scores a reply with one number, trained so preferred replies score higher.</td><td><code>rm_w</code></td></tr>
+<tr><td><b>Bradley–Terry model</b></td><td>P(A preferred over B) = σ(r<sub>A</sub> − r<sub>B</sub>).</td><td><code>sigmoid(d)</code></td></tr>
+<tr><td><b>σ (sigmoid)</b></td><td>σ(x) = 1/(1 + e<sup>−x</sup>): squashes any number into a probability between 0 and 1.</td><td><code>sigmoid()</code></td></tr>
+<tr><td><b>KL divergence</b></td><td>How different two probability distributions are; 0 = identical.</td><td><code>kl</code> in the logs</td></tr>
+<tr><td><b>β</b> (beta)</td><td>Strength of the KL penalty: how strongly the model is pulled back towards π<sub>ref</sub>.</td><td><code>beta</code></td></tr>
+<tr><td><b>Reward hacking</b></td><td>The policy finds replies the reward model over-scores but people dislike.</td><td>β = 0 run</td></tr>
+<tr><td><b>True score</b></td><td>In our toy: the hidden "human taste". The learner never sees it; we use it to check.</td><td><code>true_score()</code></td></tr>
+<tr><td><b>DPO</b></td><td>Direct Preference Optimization: train the policy on comparisons directly, no RM, no PPO.</td><td><code>dpo.py</code></td></tr>
+<tr><td><b>Implicit reward</b></td><td>DPO's built-in judge: β·log(π(y)/π<sub>ref</sub>(y)).</td><td><code>implicit_accuracy()</code></td></tr>
+<tr><td><b>RLAIF</b></td><td>RL from AI Feedback: an AI model (guided by written principles) makes the comparisons instead of people.</td><td>(explained, chapter 12)</td></tr>
+</table>
+
+<!-- ═══════════ 03 ═══════════ -->
+<h2><span class="n">03</span>Intuition: comparing is easier than scoring</h2>
+
+<h3>Judging an essay competition</h3>
+<p>Ask a teacher "give this essay a score out of 100" and different teachers say 62, 75, 81: very inconsistent. Ask "which of these two essays is better?" and they mostly agree. People are much better at <b>comparing</b> than at <b>scoring</b>. RLHF collects thousands of comparisons and learns a scoring rule that explains them.</p>
+
+<h3>The danger: teaching to the rubric</h3>
+<p>Suppose students learn the teacher's marking rule is "longer essays tend to win". A clever student writes 20 pages of filler and scores well, but the essay is bad. The marking rule (the reward model) was a <b>shortcut</b> that worked for normal essays, and it breaks when someone optimises against it. That's <b>reward hacking</b>, and our toy shows it happening (chapter 10).</p>
+<div class="box plain"><span class="tag">Goodhart's law</span>
+<p>"When a measure becomes a target, it ceases to be a good measure." The reward model measures quality on the kind of replies it saw. Push the policy hard to maximise it, and the policy moves to replies the measure was never tested on.</p>
+</div>
+
+<h3>The fix: a leash</h3>
+<p>The KL penalty says: "you may change your style, but every step away from your original (SFT) way of writing costs you". Small, sensible improvements pay off; drifting into strange text costs more than the reward model gives.</p>
+
+<!-- ═══════════ 04 ═══════════ -->
+<h2><span class="n">04</span>Recap: policy gradient and PPO</h2>
+<p class="sub">Booklets 04 and 06 in one page, using real output of <code>hand_examples.py</code>.</p>
+
+<h3>One policy-gradient step on a 3-word softmax row</h3>
+<pre>
+logits [0, 0, 0] → probabilities [0.333, 0.333, 0.333]
+wrote 'refund' (the 2nd word), advantage +1.0
+gradient of log π = one_hot − π = [−0.333, +0.667, −0.333]
+new logits = old + 0.3 × 1.0 × gradient = [−0.1, 0.2, −0.1]
+new probabilities = [0.2985, 0.403, 0.2985]          ← 'refund' became more likely
+</pre>
+<h3>PPO's clip (ε = 0.2): stop pushing after a 20% change</h3>
+<pre>
+ratio 1.1, A +2.0:  min(+2.20, +2.20) = +2.20   (normal push)
+ratio 1.3, A +2.0:  min(+2.60, +2.40) = +2.40   (clipped: stop pushing)
+ratio 0.7, A −2.0:  min(−1.40, −1.60) = −1.60   (clipped: stop pushing)
+ratio 0.7, A +2.0:  min(+1.40, +1.60) = +1.40   (normal push: fix a wrong-way change)
+</pre>
+<p>In RLHF, every word of a reply gets the <b>same advantage</b>: the reward arrives only at the end (like REINFORCE's Monte Carlo return), minus a baseline, the average reward of the other replies to the same prompt.</p>
+
+<!-- ═══════════ 05 ═══════════ -->
+<h2><span class="n">05</span>Our toy chat assistant + SFT</h2>
+<p class="sub"><code>toy_world.py</code>: small enough to inspect, the same kind of problem as a real one.</p>
+
+<table>
+<tr><td style="width:24%"><b>Prompts</b></td><td>"Where is my parcel?" · "I was charged twice!" · "I forgot my password."</td></tr>
+<tr><td><b>Vocabulary</b></td><td>&lt;end&gt;, hi, sorry, please, tracking, refund, reset, link, great, ok (10 actions)</td></tr>
+<tr><td><b>State</b></td><td>(prompt, last word written): the policy is a table of logits, one softmax row per state</td></tr>
+<tr><td><b>Episode</b></td><td>one reply, at most 8 words; "&lt;end&gt;" is an action too</td></tr>
+<tr><td><b>Hidden human taste</b></td><td>+2 per relevant word (tracking/link for parcels, sorry/refund for double charges, reset/link for passwords) · −1 off-topic content · +0.5 polite · −0.3 filler · <b>−1.5 for every repeated word</b> · −0.5 per word over 4 · empty reply −3</td></tr>
+<tr><td><b>Simulated labellers</b></td><td>compare two replies and pick A with probability σ(true<sub>A</sub> − true<sub>B</sub>): noisy, like real people</td></tr>
+</table>
+<p>The learner <b>never</b> sees the hidden taste. It only sees which reply won each comparison. We use the hidden score only to check the true quality.</p>
+
+<h3>Stage 2: SFT on 18 demo replies</h3>
+<pre>
+BEFORE SFT (every word equally likely), replies to 'I was charged twice!':
+   refund tracking link tracking link link refund ok        true score −8.3
+   ok great refund hi sorry refund hi                       true score −0.6
+AFTER SFT (this is π_ref):
+   sorry reset hi great refund                              true score +2.7
+   sorry                                                    true score +2.0
+   link great sorry refund please ok refund refund          true score −2.1
+
+Average hidden true score:  before SFT −2.44 (5.14 words)   after SFT +0.49 (3.64 words)
+</pre>
+<p>SFT gets the model roughly on topic, but its replies are hit-and-miss. Writing perfect demos for every situation is expensive; comparisons are cheaper. Next stage.</p>
+
+<!-- ═══════════ 06 ═══════════ -->
+<h2><span class="n">06</span>Maths I: Bradley–Terry, the reward model</h2>
+<p class="sub">The maths: the exponential, the logarithm, and the chain rule.</p>
+
+<pre style="font-size:9.6pt">
+P(A preferred over B)  =  σ( r<sub>A</sub> − r<sub>B</sub> )          σ(x) = 1 / (1 + e<sup>−x</sup>)
+                              ▲ the reward model's scores for the two replies
+
+loss for one pair where W won and L lost  =  − log σ( r<sub>W</sub> − r<sub>L</sub> )
+</pre>
+<ul>
+<li>Equal scores → σ(0) = 0.5: a coin flip. A score gap of 2 → σ(2) = 0.88: 88% sure.</li>
+<li>Only <b>differences</b> matter: adding 100 to every score changes nothing.</li>
+<li>Minimising the loss = making the observed winners look likely: "maximum likelihood".</li>
+</ul>
+
+<h3>Worked example (real output)</h3>
+<pre>
+reward model says r_A = 2.0, r_B = 1.0          d = r_A − r_B = 1.0
+P(A preferred) = σ(1.0) = 1 / (1 + e<sup>−1</sup>) = 1 / (1 + 0.3679) = 0.7311
+
+If the human picked A:  loss = −log(0.7311) = 0.3133
+   slope d(loss)/d(r_A) = −(1 − σ(d)) = −0.2689   → raise r_A
+   slope d(loss)/d(r_B) = +(1 − σ(d)) = +0.2689   → lower r_B
+If the human picked B (the model was WRONG):  loss = −log σ(−1) = 1.3133,  slope −0.7311: a big push
+
+One gradient step (learning rate 0.5) after "A won":  r_A 2.0 → 2.1345,   r_B 1.0 → 0.8655
+   new P(A preferred) = 0.7806,  new loss = 0.2477
+</pre>
+
+<h3>Where the slope comes from (chain rule)</h3>
+<pre style="font-size:9.6pt">
+d/dx [ −log σ(x) ]  =  −σ′(x)/σ(x)  =  −σ(x)(1 − σ(x))/σ(x)  =  −(1 − σ(x))      using σ′ = σ(1 − σ)
+x = r<sub>W</sub> − r<sub>L</sub>:   ∂loss/∂r<sub>W</sub> = −(1 − σ(x)),    ∂loss/∂r<sub>L</sub> = +(1 − σ(x))
+</pre>
+<table>
+<tr><th class="n">gap d</th><th class="n">−2</th><th class="n">−1</th><th class="n">0</th><th class="n">1</th><th class="n">2</th><th class="n">4</th></tr>
+<tr><td>σ(d)</td><td class="n">0.119</td><td class="n">0.269</td><td class="n">0.500</td><td class="n">0.731</td><td class="n">0.881</td><td class="n">0.982</td></tr>
+<tr><td>loss</td><td class="n">2.127</td><td class="n">1.313</td><td class="n">0.693</td><td class="n">0.313</td><td class="n">0.127</td><td class="n">0.018</td></tr>
+<tr><td>slope</td><td class="n">−0.881</td><td class="n">−0.731</td><td class="n">−0.500</td><td class="n">−0.269</td><td class="n">−0.119</td><td class="n">−0.018</td></tr>
+</table>
+<p>Pairs the model already gets right with a big gap barely move it; pairs it gets wrong push hardest. Same idea as the TD error: learn most from surprises.</p>
+
+<!-- ═══════════ 07 ═══════════ -->
+<h2><span class="n">07</span>Training the reward model</h2>
+<p class="sub">Real output of <code>python reward_model.py</code>: 3,000 simulated comparisons of SFT replies.</p>
+
+<pre>
+pair 0: 'I forgot my password.'   human picked: reset link please link   over: hi hi reset link
+pair 1: 'I was charged twice!'    human picked: sorry ok please          over: tracking ok refund
+
+Loss: start 0.6931 (= log 2, a coin flip)  →  end 0.5299
+Accuracy on the 2,400 training pairs : 72.9%
+Accuracy on the 600 held-out pairs   : 71.6%
+Best possible (judge with the hidden true score): 88.1%   ← labellers are noisy; nobody gets 100%
+</pre>
+
+<p>Our reward model is deliberately simple: <b>a weight for each word, per prompt, added up</b>.</p>
+<pre>
+learned reward per word:   hi     sorry  please tracking refund  reset   link   great    ok
+Where is my parcel?       −0.19  −0.24  −0.36  +0.22   −0.73  −0.63  +0.29  −0.44  −0.26
+I was charged twice!      −0.33  +0.25  −0.26  −0.82   +0.40  −0.99  −0.53  −0.52  −0.56
+I forgot my password.     −0.29  −0.26  −0.26  −0.74   −0.78  +0.32  +0.45  −0.50  −0.50
+</pre>
+<p>It learned sensible things from comparisons alone: "tracking" and "link" are good for parcels, "sorry" and "refund" for double charges, "reset" and "link" for passwords.</p>
+
+<div class="box warn"><span class="tag">The blind spot (the reward model has never seen repetition)</span>
+<pre style="background:transparent;border:0;padding:0;margin:4px 0">
+sorry refund                                        RM +0.65   true +4.0
+hi sorry refund please                              RM +0.06   true +5.0
+sorry refund sorry refund                           RM +1.30   true +1.0
+refund refund refund refund refund refund refund refund   RM +3.21   true −10.5
+</pre>
+<p style="margin:0">Adding up word weights, the more "refund"s the better, while real humans hate the 8-fold repetition. Real reward models are big neural networks with subtler blind spots (for example favouring longer or more flattering answers), but the problem is the same.</p>
+</div>
+
+<!-- ═══════════ 08 ═══════════ -->
+<h2><span class="n">08</span>Maths II: KL, staying close to home</h2>
+
+<pre style="font-size:9.6pt">
+KL(π<sub>new</sub> ‖ π<sub>ref</sub>) = Σ<sub>a</sub> π<sub>new</sub>(a) · log( π<sub>new</sub>(a) / π<sub>ref</sub>(a) )          0 = no drift at all
+</pre>
+<h3>Worked example (real output): one word choice</h3>
+<pre>
+small change:  π_ref = [0.5, 0.3, 0.2]  →  π_new = [0.4, 0.5, 0.1]      (sorry, refund, great)
+    sorry : 0.40 × log(0.40/0.50) = 0.40 × (−0.2231) = −0.0893
+    refund: 0.50 × log(0.50/0.30) = 0.50 × (+0.5108) = +0.2554
+    great : 0.10 × log(0.10/0.20) = 0.10 × (−0.6931) = −0.0693
+    KL = 0.0968
+big change:    π_ref = [0.5, 0.3, 0.2]  →  π_new = [0.05, 0.9, 0.05]          KL = 0.8043
+</pre>
+
+<h3>The reward used during RL</h3>
+<pre style="font-size:9.6pt">
+R(y) = r<sub>RM</sub>(y)  −  β · log( π<sub>new</sub>(y) / π<sub>ref</sub>(y) )
+       ▲ the judge's score    ▲ "how much more likely is this reply now than for the SFT model?"
+                                 (averaged over replies, this is exactly the KL)
+</pre>
+<pre>
+reward model says 2.5;  π_new(y) = 0.4,  π_ref(y) = 0.02;   log ratio = log 20 = 2.9957
+   β = 0.0 :  2.5 − 0.0 × 2.996 = +2.5000
+   β = 0.1 :  2.5 − 0.1 × 2.996 = +2.2004
+   β = 0.5 :  2.5 − 0.5 × 2.996 = +1.0021
+   β = 1.0 :  2.5 − 1.0 × 2.996 = −0.4957      ← now this reply is NOT worth producing more of
+</pre>
+<p>A reply the SFT model would almost never write (2% likely) but the new model writes 40% of the time pays a big "drift tax". Unless the judge loves it a lot, it isn't worth it.</p>
+
+<!-- ═══════════ 09 ═══════════ -->
+<h2><span class="n">09</span>RL fine-tuning: the algorithm and code</h2>
+<figure>
+<svg viewBox="0 0 760 230" role="img" aria-label="RLHF PPO loop: write replies, judge with reward model minus KL, advantage, PPO update">
+  <defs><marker id="g9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="220" height="60" rx="5" class="bx"/><text x="130" y="44" text-anchor="middle" font-weight="700">1 · WRITE</text><text x="130" y="64" text-anchor="middle" class="t-m">96 replies (32 per prompt)</text>
+  <line x1="240" y1="50" x2="268" y2="50" class="ln" marker-end="url(#g9)"/>
+  <rect x="270" y="20" width="220" height="60" rx="5" class="bxa"/><text x="380" y="44" text-anchor="middle" font-weight="700">2 · JUDGE</text><text x="380" y="64" text-anchor="middle">r_RM − β·log(π/π_ref)</text>
+  <line x1="490" y1="50" x2="518" y2="50" class="ln" marker-end="url(#g9)"/>
+  <rect x="520" y="20" width="220" height="60" rx="5" class="bx"/><text x="630" y="44" text-anchor="middle" font-weight="700">3 · ADVANTAGE</text><text x="630" y="64" text-anchor="middle" class="t-m">minus the prompt's average</text>
+  <line x1="630" y1="80" x2="630" y2="148" class="ln" marker-end="url(#g9)"/>
+  <rect x="520" y="150" width="220" height="60" rx="5" class="bx"/><text x="630" y="174" text-anchor="middle" font-weight="700">4 · SHARE</text><text x="630" y="194" text-anchor="middle" class="t-m">every word gets its reply's A</text>
+  <line x1="520" y1="180" x2="492" y2="180" class="ln" marker-end="url(#g9)"/>
+  <rect x="270" y="150" width="220" height="60" rx="5" class="bxg"/><text x="380" y="174" text-anchor="middle" font-weight="700">5 · PPO UPDATE</text><text x="380" y="194" text-anchor="middle">4 epochs, clip 0.2</text>
+  <line x1="270" y1="180" x2="242" y2="180" class="ln" marker-end="url(#g9)"/>
+  <rect x="20" y="150" width="220" height="60" rx="5" class="bx"/><text x="130" y="174" text-anchor="middle" font-weight="700">6 · REPEAT</text><text x="130" y="194" text-anchor="middle" class="t-m">400 iterations</text>
+  <line x1="130" y1="150" x2="130" y2="82" class="ln" marker-end="url(#g9)"/>
+</svg>
+<figcaption>No human is involved during this loop: the reward model stands in for them. Humans were only needed to make the 3,000 comparisons.</figcaption>
+</figure>
+
+<h3>The code: <code>rlhf_ppo.py</code></h3>
+<pre><span class="c"># 1. ROLL OUT: the policy writes a batch of replies (32 per prompt)</span>
+replies = sample_replies(theta, prompts, rng)
+<span class="c"># 2. SCORE: reward model judges each finished reply, minus the KL penalty</span>
+logp_old = token_logprobs(theta, flat)
+logp_ref = token_logprobs(theta_ref, flat)
+log_ratio = np.bincount(flat[3], weights=logp_old - logp_ref, minlength=n)   <span class="c"># log π(y)/π_ref(y)</span>
+r_rm = np.array([features(p, to_words(r)) @ rm_w <span class="k">for</span> p, r <span class="k">in</span> zip(prompts, replies)])
+R = <span class="h">r_rm - beta * log_ratio</span>
+<span class="c"># 3. ADVANTAGE: better or worse than the other replies to the same prompt?</span>
+<span class="k">for</span> p <span class="k">in</span> range(P):
+    adv[prompts == p] -= R[prompts == p].mean()          <span class="c"># baseline = average reply</span>
+adv_tok = adv[flat[3]]                                   <span class="c"># every word shares its reply's advantage</span>
+<span class="c"># 4. PPO UPDATE: a few gradient steps on the clipped objective</span>
+<span class="k">for</span> _ <span class="k">in</span> range(epochs):
+    ratio = np.exp(token_logprobs(theta, flat) - logp_old)
+    active = np.where(adv_tok &gt; 0, ratio &lt; 1 + clip, ratio &gt; 1 - clip)   <span class="c"># the clip, as on/off</span>
+    theta += lr * grad_of_logprob(theta, flat, adv_tok * ratio * active) / n</pre>
+<table>
+<tr><th style="width:30%">Line</th><th>Meaning</th></tr>
+<tr><td><code>theta = theta_ref.copy()</code></td><td>RL starts <b>from</b> the SFT model; π<sub>ref</sub> stays frozen as the anchor.</td></tr>
+<tr><td><code>log_ratio</code></td><td>log π(y) = sum of the log-probabilities of its words, so log π(y)/π<sub>ref</sub>(y) is a sum of per-word differences.</td></tr>
+<tr><td><code>r_rm - beta * log_ratio</code></td><td>Chapter 08's penalised reward. β = 0: pure reward model.</td></tr>
+<tr><td><code>active = ...</code></td><td>PPO's clipped objective written as "push only while the ratio is inside the fence (in the helpful direction)".</td></tr>
+</table>
+
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>Running it: the β sweep and reward hacking</h2>
+<p class="sub">Real output of <code>python rlhf_ppo.py</code>: 5 values of β × 3 seeds × 400 iterations.</p>
+
+<table>
+<tr><th class="n">β</th><th class="n">reward-model score</th><th class="n">TRUE score</th><th class="n">KL from SFT</th><th class="n">length</th><th class="n">repeated words</th></tr>
+<tr><td class="n">SFT</td><td class="n">−0.58</td><td class="n">+0.49</td><td class="n">0.00</td><td class="n">3.69</td><td class="n">0.68</td></tr>
+<tr><td class="n">0.0</td><td class="n"><b>+2.62</b></td><td class="n"><b>−6.99</b></td><td class="n">15.74</td><td class="n">8.00</td><td class="n">5.99</td></tr>
+<tr><td class="n">0.1</td><td class="n">+2.53</td><td class="n">−6.42</td><td class="n">13.18</td><td class="n">7.70</td><td class="n">5.67</td></tr>
+<tr><td class="n">0.2</td><td class="n">+1.18</td><td class="n">+0.12</td><td class="n">3.55</td><td class="n">4.20</td><td class="n">2.02</td></tr>
+<tr><td class="n"><b>0.3</b></td><td class="n">+0.68</td><td class="n"><b>+1.90</b></td><td class="n">1.43</td><td class="n">2.96</td><td class="n">0.85</td></tr>
+<tr><td class="n">1.0</td><td class="n">+0.14</td><td class="n">+1.78</td><td class="n">0.29</td><td class="n">2.68</td><td class="n">0.42</td></tr>
+</table>
+<figure><img src="file:///D:/Langchain/rl_topics/09_rlhf/rlhf_beta_sweep.png" alt="Beta sweep: RM score, true score, KL"><figcaption>Left: what PPO maximises (the reward model's score) rises highest with no penalty. Middle: the hidden TRUE quality collapses for β = 0 and 0.1. Right: KL drift (log scale).</figcaption></figure>
+
+<h3>Watching the hack happen (β = 0, seed 0)</h3>
+<pre>
+iter   0: hi please reset refund  |  sorry refund  |  link
+iter  50: tracking link  |  sorry refund please  |  reset link                  ← genuinely better!
+iter 200: tracking link tracking link tracking link tracking link  |  sorry refund  |  reset link reset link …
+iter 400: tracking link ×4  |  sorry refund sorry refund sorry refund sorry refund  |  reset link ×4
+</pre>
+<figure><img src="file:///D:/Langchain/rl_topics/09_rlhf/reward_hacking.png" alt="Reward hacking: RM vs true score, length and repeats"><figcaption>Left: the judge's score (blue) keeps rising while the true quality (red) peaks at iteration ~70 and then crashes to about −7. Right: replies grow to the 8-word limit, almost all repeats.</figcaption></figure>
+
+<h3>What to notice</h3>
+<ul>
+<li><b>RL first helped, then hacked.</b> With β = 0 the true score rose from +0.49 to <b>+3.52</b> (iteration 70), better than any final result, before the policy discovered the blind spot and fell to −7. The judge was never fooled at first; it was fooled once the policy drifted far from the replies it was trained on.</li>
+<li><b>β is the leash.</b> β = 0.3 and 1.0 kept KL small (1.4 and 0.3) and ended up genuinely better than SFT (+1.9 and +1.8 vs +0.49). Too strong a leash (β = 1) limits improvement; too weak (β ≤ 0.1) lets the model hack.</li>
+<li><b>The judge's score is not the goal.</b> The run with the best reward-model score (+2.62) had the worst real quality. In practice, teams measure real quality separately (human evaluations), stop early, and refresh the reward model with new comparisons of the new model's replies.</li>
+</ul>
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>DPO: skip the reward model</h2>
+<p class="sub">Direct Preference Optimization (Rafailov et al., 2023). Real output of <code>python dpo.py</code>.</p>
+
+<p>DPO's insight: the best policy for "reward − β·KL" has a known shape, so you can rewrite the Bradley–Terry loss directly in terms of the <b>policy's own probabilities</b>. The policy <i>is</i> the reward model:</p>
+<pre style="font-size:9.6pt">
+implicit reward of a reply:   r(y) = β · log( π(y) / π<sub>ref</sub>(y) )
+
+DPO loss for a pair (winner y<sub>w</sub>, loser y<sub>l</sub>):
+   z    = β · [ log(π(y<sub>w</sub>)/π<sub>ref</sub>(y<sub>w</sub>))  −  log(π(y<sub>l</sub>)/π<sub>ref</sub>(y<sub>l</sub>)) ]
+             ▲ how much MORE likely the winner became     ▲ … and the loser
+   loss = − log σ(z)                                    ← the Bradley–Terry loss again!
+</pre>
+<p>Plain supervised learning on the fixed comparisons: no replies written during training, no reward model, no advantages, no clipping.</p>
+
+<h3>Worked example (real output, β = 0.5)</h3>
+<pre>
+winner: log(0.10/0.08) = +0.2231        loser: log(0.05/0.06) = −0.1823
+z = 0.5 × (0.2231 − (−0.1823)) = 0.2027
+loss = −log σ(0.2027) = −log(0.5505) = 0.5969
+push strength β·(1 − σ(z)) = 0.2247  → raise log π(winner), lower log π(loser)
+(at the start π = π_ref, so z = 0 and loss = log 2 = 0.6931)
+</pre>
+
+<h3>The DPO update in code</h3>
+<pre>gain_w = reply_logprobs(theta, flat_w, n) - ref_w      <span class="c"># how much more likely each winner is now</span>
+gain_l = reply_logprobs(theta, flat_l, n) - ref_l      <span class="c"># ... and each loser</span>
+z = beta * (gain_w - gain_l)
+push = beta * (1 - sigmoid(z))                         <span class="c"># big where the model is most wrong</span>
+grad = grad_of_logprob(theta, flat_w, push[...]) - grad_of_logprob(theta, flat_l, push[...])
+theta += lr * grad / n                                 <span class="c"># gradient ASCENT on log σ(z)</span></pre>
+
+<h3>DPO vs RLHF on the same 2,400 comparisons (6,000 fresh replies each)</h3>
+<table>
+<tr><th>Model</th><th class="n">RM score</th><th class="n">TRUE</th><th class="n">KL</th><th class="n">length</th><th class="n">repeats</th></tr>
+<tr><td>SFT (π<sub>ref</sub>)</td><td class="n">−0.59</td><td class="n">+0.47</td><td class="n">0.00</td><td class="n">3.68</td><td class="n">0.69</td></tr>
+<tr><td>RLHF PPO, β = 0</td><td class="n">+2.57</td><td class="n">−6.99</td><td class="n">14.88</td><td class="n">8.00</td><td class="n">5.99</td></tr>
+<tr><td>RLHF PPO, β = 0.3</td><td class="n">+0.65</td><td class="n">+1.94</td><td class="n">1.33</td><td class="n">2.89</td><td class="n">0.80</td></tr>
+<tr><td>DPO, β = 0.1</td><td class="n">+0.09</td><td class="n">+2.29</td><td class="n">0.44</td><td class="n">2.67</td><td class="n">0.28</td></tr>
+<tr><td><b>DPO, β = 0.3</b></td><td class="n">+0.35</td><td class="n"><b>+3.01</b></td><td class="n">0.92</td><td class="n">2.27</td><td class="n">0.13</td></tr>
+<tr><td>DPO, β = 1</td><td class="n">+0.18</td><td class="n">+2.52</td><td class="n">0.47</td><td class="n">2.53</td><td class="n">0.22</td></tr>
+</table>
+<figure><img src="file:///D:/Langchain/rl_topics/09_rlhf/dpo_vs_rlhf.png" alt="DPO loss, true score, and final comparison"><figcaption>Left: DPO's loss falls from log 2. Middle: true quality rises steadily. Right: final true score of each model (KL in brackets).</figcaption></figure>
+<ul>
+<li>In our toy, DPO beat PPO-based RLHF on true quality (+3.01 vs +1.94) with less drift (KL 0.92 vs 1.33), and it never hacked: it only learns from the human comparisons themselves, never from a reward model's blind spots.</li>
+<li>DPO's hidden judge ranks held-out pairs 73–79% correctly, about as well as the separate reward model (71.6%).</li>
+<li>Honest caveat: this is one toy. In large real systems both approaches are used and compared, and which is better depends on the data. PPO-style RLHF can use fresh replies and a reward model on new prompts; DPO is simpler and cheaper.</li>
+</ul>
+
+<!-- ═══════════ 12 ═══════════ -->
+<h2><span class="n">12</span>Real-world problems</h2>
+
+<h3>1 · Customer-support assistant (our toy, grown up)</h3>
+<table>
+<tr><td style="width:22%"><b>State / action</b></td><td>conversation so far / next token</td></tr>
+<tr><td><b>Reward</b></td><td>reward model trained on support agents' comparisons: "which reply would you rather send?"</td></tr>
+<tr><td><b>Collecting preferences</b></td><td>show agents two drafts per real ticket; they pick one (and can flag both as bad)</td></tr>
+<tr><td><b>What could be hacked</b></td><td>over-apologising, promising refunds the policy doesn't allow, long boilerplate. Add rules and checks the reward model must respect, and measure real outcomes (resolved tickets).</td></tr>
+</table>
+
+<h3>2 · A code assistant</h3>
+<table>
+<tr><td style="width:22%"><b>Reward</b></td><td>mix of (a) automatic checks: does the code run and pass tests? and (b) a reward model from developers' preferences for readability</td></tr>
+<tr><td><b>Why it helps</b></td><td>tests are an <i>objective</i> part of the reward that's hard to hack; preferences cover style</td></tr>
+<tr><td><b>Pitfall</b></td><td>if the tests are weak, the model learns to pass tests rather than to write correct code (reward hacking again)</td></tr>
+</table>
+
+<h3>3 · A summariser (well documented)</h3>
+<p>OpenAI's "Learning to summarize from human feedback" (2020) trained a reward model from people's comparisons of summaries and fine-tuned with PPO + KL. The RL summaries were preferred over the supervised ones. When the KL penalty was too weak, they observed over-optimisation: summaries scored highly by the reward model but were worse according to people. That's the same story as our chapter 10.</p>
+
+<h3>4 · AI feedback (RLAIF) and Constitutional AI</h3>
+<p>Human comparisons are slow and expensive. In <b>RLAIF</b> another AI model makes the comparisons. Anthropic's <b>Constitutional AI</b> (2022) described models critiquing and comparing replies according to a written list of principles (a "constitution"), to train helpful and harmless assistants with far fewer human labels. The pipeline is the same; only the source of preferences changes.</p>
+
+<div class="box warn"><span class="tag">Pitfalls in real life</span>
+<p><b>Labeller disagreement:</b> people genuinely differ (our labellers agree with the hidden taste only 88% of the time). <b>Sycophancy:</b> if people prefer answers that agree with them, the model learns to flatter. <b>Reward hacking:</b> any blind spot of the reward model gets found. <b>Who chooses?</b> The values in the preferences become the model's values, so choosing labellers and principles is an ethical decision, not just a technical one.</p>
+</div>
+
+<!-- ═══════════ 13 ═══════════ -->
+<h2><span class="n">13</span>Side by side</h2>
+<table class="long">
+<tr><th style="width:20%"></th><th>SFT only</th><th>RLHF (RM + PPO)</th><th>DPO</th><th>RLAIF</th></tr>
+<tr><td>Data needed</td><td>example replies</td><td>comparisons</td><td>comparisons</td><td>principles + an AI judge</td></tr>
+<tr><td>Separate reward model</td><td>no</td><td><b>yes</b></td><td>no (implicit)</td><td>yes (or DPO-style)</td></tr>
+<tr><td>Writes new replies during training</td><td>no</td><td><b>yes</b> (on-policy)</td><td>no</td><td>yes (usually)</td></tr>
+<tr><td>Keeps close to SFT via</td><td>—</td><td>KL penalty β + PPO clip</td><td>β inside the loss</td><td>KL penalty</td></tr>
+<tr><td>Risk of reward hacking</td><td>none</td><td><b>high</b> without enough KL</td><td>low (no RM to exploit)</td><td>depends on the AI judge</td></tr>
+<tr><td>Complexity</td><td>low</td><td>high (4 models in memory: policy, ref, RM, critic)</td><td>low (policy + ref)</td><td>high</td></tr>
+<tr><td>Our toy: TRUE score</td><td>+0.49</td><td>+1.94 (β = 0.3), −6.99 (β = 0)</td><td><b>+3.01</b> (β = 0.3)</td><td>—</td></tr>
+</table>
+
+<!-- ═══════════ 14 ═══════════ -->
+<h2><span class="n">14</span>Clearing up the confusions</h2>
+<div class="qa"><div class="q">Is the reward model the same as the language model?</div><p>No. It's a separate model that reads a reply and outputs one number. In real systems it's often a copy of the language model with its word-predicting output replaced by a single score.</p></div>
+<div class="qa"><div class="q">Does a human give the reward during RL?</div><p>No. Humans only make comparisons <i>beforehand</i>. During RL the reward model gives every reward instantly, which is why it can be hacked: there's no human watching each reply.</p></div>
+<div class="qa"><div class="q">Which probabilities are being learned?</div><p>The model's own next-word probabilities π(word | text so far): its action probabilities. Not the world's, and not the labellers' preference probabilities (those are only modelled by Bradley–Terry).</p></div>
+<div class="qa"><div class="q">Why do all words in a reply get the same advantage?</div><p>The reward only arrives at the end of the reply, like a game with one prize at the finish (REINFORCE / Monte Carlo). Real systems sometimes add a critic to spread credit better.</p></div>
+<div class="qa"><div class="q">Why not just maximise the reward model's score harder?</div><p>Because the reward model is only an approximation. Chapter 10: the hardest optimisation (β = 0) gave the best reward-model score and the worst real quality.</p></div>
+<div class="qa"><div class="q">Is the KL penalty the same as PPO's clip?</div><p>Both keep changes small, but against different anchors. The clip limits each update relative to the policy that just wrote the batch. KL limits the total drift from the SFT model over the whole training.</p></div>
+<div class="qa"><div class="q">Why is the reward model's accuracy only 72%?</div><p>Labellers are noisy: even judging with the hidden true score only reaches 88.1%, because people sometimes pick the worse reply. And our reward model is very simple (word counts).</p></div>
+<div class="qa"><div class="q">Is DPO reinforcement learning?</div><p>It optimises the same goal as RLHF (reward − β·KL) but by supervised learning on fixed comparisons. It is often grouped with RLHF methods as "preference optimisation", without an RL loop.</p></div>
+<div class="qa"><div class="q">Why does DPO's loss start at exactly 0.693?</div><p>At the start π = π<sub>ref</sub>, so every gain is 0, z = 0, σ(0) = 0.5, and −log 0.5 = log 2 = 0.693: a coin flip.</p></div>
+<div class="qa"><div class="q">Is this how every chat assistant is trained?</div><p>The general recipe (pretraining, then fine-tuning with demonstrations and preferences) is widely published. Exact details vary by company and change over time, and many use additional techniques. This booklet teaches the core, publicly documented ideas.</p></div>
+
+<!-- ═══════════ 15 ═══════════ -->
+<h2><span class="n">15</span>Practice problems</h2>
+<ol>
+<li><b>Sigmoid.</b> r<sub>A</sub> = 3, r<sub>B</sub> = 1. What is P(A preferred)? (e<sup>−2</sup> ≈ 0.135)</li>
+<li><b>Loss.</b> In problem 1 the human picked A. Loss? If they picked B? (ln 0.881 ≈ −0.127, ln 0.119 ≈ −2.13)</li>
+<li><b>Gradient.</b> In problem 1 with A winning, compute ∂loss/∂r<sub>A</sub> and the new scores after one step with learning rate 1.</li>
+<li><b>Shift.</b> Add 10 to both scores in problem 1. What changes?</li>
+<li><b>KL.</b> π<sub>ref</sub> = [0.5, 0.5], π<sub>new</sub> = [0.8, 0.2]. KL(π<sub>new</sub> ‖ π<sub>ref</sub>)? (ln 1.6 ≈ 0.470, ln 0.4 ≈ −0.916)</li>
+<li><b>Penalised reward.</b> r<sub>RM</sub> = 1.5, π(y) = 0.3, π<sub>ref</sub>(y) = 0.1, β = 0.5. R(y)? (ln 3 ≈ 1.099)</li>
+<li><b>DPO.</b> β = 1, winner gain log(π/π<sub>ref</sub>) = +0.4, loser gain = +0.1. z and loss? (σ(0.3) ≈ 0.574, ln 0.574 ≈ −0.555)</li>
+<li><b>Sequence probability.</b> A reply has words with probabilities 0.5, 0.4, 0.5 (and then &lt;end&gt; with 0.8). log π(y)? (ln 0.5 ≈ −0.693, ln 0.4 ≈ −0.916, ln 0.8 ≈ −0.223)</li>
+<li><b>Conceptual.</b> Name a blind spot a code assistant's reward model could have, and how the policy might exploit it.</li>
+<li><b>Conceptual.</b> Why does DPO not suffer the "refund refund refund" hack in our toy?</li>
+<li><b>Coding.</b> In <code>rlhf_ppo.py</code>, add β = 0.5 to the sweep. Predict its TRUE score relative to 0.3 and 1.0.</li>
+<li><b>Coding.</b> In <code>toy_world.py</code>, make repeats cost −3 instead of −1.5 and rerun everything. Does the reward model still have the blind spot? Why?</li>
+</ol>
+
+<!-- ═══════════ 16 ═══════════ -->
+<h2><span class="n">16</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here, run in this order</span>
+cd D:\Langchain\rl_topics\09_rlhf
+python hand_examples.py    <span class="c"># Bradley–Terry, KL, penalised reward, one DPO pair, PG recap   (1 s)</span>
+python reward_model.py     <span class="c"># stages 2–3: SFT + reward model from 3,000 comparisons          (s)</span>
+python rlhf_ppo.py         <span class="c"># stage 4: PPO + KL for 5 values of β; reward hacking             (~30 s)</span>
+python dpo.py              <span class="c"># DPO on the same comparisons, and the final comparison           (~30 s)</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">RLHF in 9 lines</span>
+<pre style="background:#fff;margin:6px 0">π_ref = SFT(demos)
+pairs = humans compare 2 replies
+RM: minimise −log σ(r_w − r_l)
+π = π_ref
+repeat:
+  write replies y ~ π
+  R = RM(y) − β·log(π(y)/π_ref(y))
+  A = R − average R for that prompt
+  PPO update of π (clip 0.2)</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">Key formulas</span>
+<pre style="background:#fff;margin:6px 0">P(A≻B) = σ(r_A − r_B)
+BT loss = −log σ(r_w − r_l)
+d/dx[−log σ(x)] = −(1 − σ(x))
+KL = Σ π log(π/π_ref)
+R = r_RM − β log(π(y)/π_ref(y))
+DPO: z = β[Δlog_w − Δlog_l]
+     loss = −log σ(z)</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>A language model is a policy: state = text so far, action = next word, reward = one score at the end of the reply.</li>
+<li>Nobody can write the reward, so a reward model learns it from human comparisons with the Bradley–Terry loss −log σ(r<sub>w</sub> − r<sub>l</sub>).</li>
+<li>PPO then maximises the reward model's score minus β·KL from the SFT model; without enough KL the policy hacks the reward model's blind spots.</li>
+<li>DPO skips the reward model and PPO: it applies the Bradley–Terry loss directly to the policy's own probability changes.</li>
+</ol>
+</div>
+
+<!-- ═══════════ 17 ═══════════ -->
+<h2><span class="n">17</span>Answers</h2>
+<ol>
+<li>d = 2; σ(2) = 1/(1 + 0.135) = <b>0.881</b>.</li>
+<li>A picked: −ln 0.881 = <b>0.127</b>. B picked: −ln σ(−2) = −ln 0.119 = <b>2.13</b> (big, because the model was confidently wrong).</li>
+<li>∂loss/∂r<sub>A</sub> = −(1 − 0.881) = <b>−0.119</b>; ∂loss/∂r<sub>B</sub> = +0.119. Gradient descent: r<sub>A</sub> = 3 + 0.119 = <b>3.119</b>, r<sub>B</sub> = 1 − 0.119 = <b>0.881</b>.</li>
+<li>Nothing: only the gap (still 2) matters. That's why reward models only learn <i>relative</i> scores.</li>
+<li>0.8·ln(0.8/0.5) + 0.2·ln(0.2/0.5) = 0.8 × 0.470 + 0.2 × (−0.916) = 0.376 − 0.183 = <b>0.193</b>.</li>
+<li>R = 1.5 − 0.5 × ln 3 = 1.5 − 0.549 = <b>0.951</b>.</li>
+<li>z = 1 × (0.4 − 0.1) = <b>0.3</b>; loss = −ln σ(0.3) = −ln 0.574 = <b>0.555</b>.</li>
+<li>log π(y) = −0.693 − 0.916 − 0.693 − 0.223 = <b>−2.525</b> (π(y) ≈ 0.08). A reply's probability is the product of its word probabilities, so its log is the sum.</li>
+<li>Example: it rewards answers that "look confident" or contain many comments, so the policy writes long, confident-sounding but wrong code. Mixing in objective checks (tests) helps.</li>
+<li>DPO only moves probabilities using the actual compared pairs, which never contained 8 repeated "refund"s, and β·log(π/π<sub>ref</sub>) penalises drifting far from π<sub>ref</sub>. There's no separate judge whose blind spot it could search for.</li>
+<li>A reasonable prediction: between β = 0.3 and β = 1.0, probably close to both (+1.8 to +1.9): enough leash to avoid hacking. Run it to check.</li>
+<li>The blind spot remains if the reward model is still a sum of word weights: it can't represent "repetition is bad" no matter what the data says. A better reward model (one that can see repeats) is needed; more data alone won't fix a model that can't express the idea.</li>
+</ol>
+
+</main>
+</body>
+</html>

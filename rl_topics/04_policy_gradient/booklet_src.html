@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Policy Gradients REINFORCE</title>
+<!--STYLE-->
+</head>
+<body>
+<main>
+
+<!-- ═══════════ COVER ═══════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Booklet 04</div>
+  <h1>Policy Gradients<br>and REINFORCE</h1>
+  <p class="lede">Stop learning scores and picking the biggest. Learn the <i>probabilities</i> of each action directly, and push up the ones that led to good results. The idea behind actor-critic, PPO and the fine-tuning of chat assistants. Every number comes from code in <code>rl_topics/04_policy_gradient</code>.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture</div>
+    <div><span>02</span>Words you need</div>
+    <div><span>03</span>Intuition: when random is best</div>
+    <div><span>04</span>Maths I: softmax, scores → probabilities</div>
+    <div><span>05</span>Maths II: the policy gradient</div>
+    <div><span>06</span>Maths III: returns-to-go and the baseline</div>
+    <div><span>07</span>The algorithm</div>
+    <div><span>08</span>The code, line by line</div>
+    <div><span>09</span>Running it: bandit and rock-paper-scissors</div>
+    <div><span>10</span>Running it: CartPole</div>
+    <div><span>11</span>Real-world problems</div>
+    <div><span>12</span>Side by side</div>
+    <div><span>13</span>Clearing up the confusions</div>
+    <div><span>14</span>Practice problems</div>
+    <div><span>15</span>Run it yourself + cheat sheet</div>
+    <div><span>16</span>Answers</div>
+  </div>
+</section>
+
+<!-- ═══════════ 01 ═══════════ -->
+<h2><span class="n">01</span>The big picture</h2>
+<p class="sub">Two families of RL. You've only met one so far.</p>
+
+<p>Everything you've built so far is <b>value-based</b>: learn a score for each action (Q), then choose the action with the biggest score (argmax). The policy is a side effect of the scores.</p>
+<p><b>Policy-based</b> methods skip the scores. The agent directly holds <b>a probability for each action</b> in each state, like "push left 30%, push right 70%", and learns those probabilities. It plays by <b>rolling its own dice</b>.</p>
+
+<figure>
+<svg viewBox="0 0 760 190" role="img" aria-label="Value-based learns scores then argmax; policy-based learns probabilities then samples">
+  <defs><marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <text x="20" y="20" class="t-h t-a">VALUE-BASED (Q-learning, DQN)</text>
+  <rect x="20" y="32" width="120" height="50" rx="5" class="bx"/><text x="80" y="62" text-anchor="middle">state s</text>
+  <line x1="140" y1="57" x2="208" y2="57" class="ln" marker-end="url(#c1)"/>
+  <rect x="210" y="32" width="220" height="50" rx="5" class="bx"/><text x="320" y="52" text-anchor="middle" font-weight="700">scores Q(s,·)</text><text x="320" y="71" text-anchor="middle" class="t-m">left 3.1   right 3.2</text>
+  <line x1="430" y1="57" x2="498" y2="57" class="ln" marker-end="url(#c1)"/><text x="464" y="49" text-anchor="middle" class="t-m">argmax</text>
+  <rect x="500" y="32" width="240" height="50" rx="5" class="bxg"/><text x="620" y="62" text-anchor="middle">always "right" (deterministic)</text>
+  <text x="20" y="115" class="t-h t-a">POLICY-BASED (REINFORCE, A2C, PPO)</text>
+  <rect x="20" y="127" width="120" height="50" rx="5" class="bx"/><text x="80" y="157" text-anchor="middle">state s</text>
+  <line x1="140" y1="152" x2="208" y2="152" class="ln" marker-end="url(#c1)"/>
+  <rect x="210" y="127" width="220" height="50" rx="5" class="bxa"/><text x="320" y="147" text-anchor="middle" font-weight="700">probabilities π(·|s)</text><text x="320" y="166" text-anchor="middle" class="t-m">left 0.3   right 0.7</text>
+  <line x1="430" y1="152" x2="498" y2="152" class="ln" marker-end="url(#c1)"/><text x="464" y="144" text-anchor="middle" class="t-m">roll dice</text>
+  <rect x="500" y="127" width="240" height="50" rx="5" class="bxg"/><text x="620" y="157" text-anchor="middle">"right" 70% of the time</text>
+</svg>
+<figcaption>Value-based: learn scores, take the best. Policy-based: learn the probabilities themselves.</figcaption>
+</figure>
+
+<h3>Why would you want that?</h3>
+<table>
+<tr><th style="width:30%">Problem</th><th>Value-based struggles because…</th><th>Policy-based…</th></tr>
+<tr><td>The best play is <b>random</b> (rock-paper-scissors, bluffing in poker)</td><td>argmax always picks the same move, and a smart opponent exploits it</td><td>can learn "1/3 each"</td></tr>
+<tr><td><b>Continuous actions</b> (steering angle, motor force)</td><td>max over infinitely many actions is impossible</td><td>outputs a distribution, e.g. "mean 12°, spread 3°"</td></tr>
+<tr><td>Small score changes flip the action</td><td>Q(left) = 3.20 vs 3.21 flips the choice completely</td><td>probabilities change smoothly</td></tr>
+<tr><td>Language models (chat assistants)</td><td>"Q for every possible next word" is awkward</td><td>a language model already <b>is</b> a policy: probabilities over the next word</td></tr>
+</table>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p><b>REINFORCE</b> plays a whole game by rolling its own dice, then <b>increases the probability</b> of every action that was followed by a better-than-usual result, and <b>decreases</b> it for actions followed by a worse one. The size of each change is set by the policy gradient: (result − baseline) × ∇log π(a|s).</p>
+</div>
+
+<!-- ═══════════ 02 ═══════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<table class="long">
+<tr><th style="width:24%">Term</th><th>Meaning in plain words</th><th style="width:27%">In your code</th></tr>
+<tr><td><b>Policy</b> π(a|s)</td><td>The agent's probability of choosing action a in state s. Now it's the thing we learn.</td><td><code>Policy</code> network</td></tr>
+<tr><td><b>Stochastic policy</b></td><td>A policy that rolls dice (gives probabilities). Deterministic = always the same action.</td><td><code>dist.sample()</code></td></tr>
+<tr><td><b>θ (theta)</b></td><td>All the knobs (weights) of the policy. Learning = adjusting θ.</td><td><code>policy.parameters()</code></td></tr>
+<tr><td><b>Logits / preferences</b> h</td><td>Raw scores, any number, positive or negative, before turning into probabilities.</td><td><code>logits</code>, <code>h</code></td></tr>
+<tr><td><b>Softmax</b></td><td>Turns logits into probabilities: e<sup>h</sup> / Σ e<sup>h</sup>. All positive, sum to 1.</td><td><code>torch.softmax</code></td></tr>
+<tr><td><b>Objective</b> J(θ)</td><td>The expected (average) total reward when playing with policy θ. We want it as big as possible.</td><td>—</td></tr>
+<tr><td><b>Gradient ascent</b></td><td>Move θ uphill: in the direction that increases J.</td><td><code>loss = −…</code> then descent</td></tr>
+<tr><td><b>Policy gradient</b> ∇J</td><td>The direction in θ-space that increases expected reward fastest.</td><td>—</td></tr>
+<tr><td><b>log π</b></td><td>Natural logarithm of the probability of the chosen action.</td><td><code>dist.log_prob(a)</code></td></tr>
+<tr><td><b>Log-derivative trick</b></td><td>∇π = π·∇log π. Lets us estimate the gradient just by playing.</td><td>—</td></tr>
+<tr><td><b>Return G</b></td><td>Total (discounted) reward of the game, or from a step onward.</td><td><code>returns_to_go()</code></td></tr>
+<tr><td><b>Returns-to-go</b> G<sub>t</sub></td><td>Only the rewards from step t onward. An action can't affect the past.</td><td><code>rtg=True</code></td></tr>
+<tr><td><b>Baseline</b> b</td><td>"What result is normal?" Subtracting it makes updates less noisy without changing their average direction.</td><td><code>baseline="mean"</code></td></tr>
+<tr><td><b>Advantage</b> (G − b)</td><td>How much better than normal the result was. Positive → push up; negative → push down.</td><td><code>G - G.mean()</code></td></tr>
+<tr><td><b>Variance</b></td><td>How much the update jumps around from game to game. REINFORCE's main weakness.</td><td>spread printed in <code>cartpole.py</code></td></tr>
+<tr><td><b>On-policy</b></td><td>Learns only from games played by the current policy. Old games must be thrown away.</td><td><code>play_episode()</code> each time</td></tr>
+</table>
+
+<!-- ═══════════ 03 ═══════════ -->
+<h2><span class="n">03</span>Intuition: when random is best</h2>
+<p class="sub">Real output of <code>python rps.py</code>.</p>
+
+<h3>Rock-paper-scissors against a spy</h3>
+<p>The opponent is a "spy": it looks at which move you've played most so far and plays the move that beats it. Three fixed policies, 3,000 rounds each (win +1, draw 0, lose −1):</p>
+<table>
+<tr><th>Your policy</th><th class="n">Average score per round</th></tr>
+<tr><td>always rock (what argmax Q would do)</td><td class="n"><b>−1.000</b> (loses every round)</td></tr>
+<tr><td>70% rock, 30% paper</td><td class="n">−0.701</td></tr>
+<tr><td>1/3 each (random)</td><td class="n"><b>+0.001</b> (can't be exploited)</td></tr>
+</table>
+<p>A <b>deterministic</b> policy, which is all Q-learning's argmax can give you, is the worst possible here. Only a <b>random</b> policy is safe. A policy-based learner can represent it; a value-based learner can't.</p>
+
+<h3>The coach analogy</h3>
+<p>A cricket coach doesn't calculate the exact value of every shot. After a match they say: "the innings went <b>better than usual</b>, so play <b>more</b> of the shots you played today; it went <b>worse</b>, so play <b>fewer</b> of them." Over many matches, good shots get more frequent. That's REINFORCE: reinforce what came before good results.</p>
+
+<div class="box warn"><span class="tag">Two kinds of probability: keep them apart</span>
+<p><b>The agent's probabilities</b> π(a|s): its own dice, which REINFORCE <b>learns</b> ("push right 70%"). <b>The world's probabilities</b>: how the environment responds (FrozenLake's slip chances, the dealer's cards). Those belong to the world, are never learned directly, and REINFORCE doesn't even need to know them.</p>
+</div>
+
+<!-- ═══════════ 04 ═══════════ -->
+<h2><span class="n">04</span>Maths I: softmax, scores → probabilities</h2>
+<p class="sub">The maths: the exponential function and fractions.</p>
+
+<p>A network's raw outputs (logits) can be any numbers: 2, −1, 0.5. Probabilities must be positive and add up to 1. <b>Softmax</b> fixes both:</p>
+<pre style="font-size:9.6pt">
+π(a)  =  e<sup>h<sub>a</sub></sup>  /  ( e<sup>h<sub>1</sub></sup> + e<sup>h<sub>2</sub></sup> + … )        e ≈ 2.718
+         ▲ always positive          ▲ dividing by the total makes them add up to 1
+</pre>
+
+<h3>Worked example 1: three logits</h3>
+<pre>
+h = [2, 1, 0]
+e<sup>2</sup> = 7.389     e<sup>1</sup> = 2.718     e<sup>0</sup> = 1.000         total = 11.107
+π = [7.389/11.107, 2.718/11.107, 1/11.107] = [0.665, 0.245, 0.090]      sum = 1 ✓
+</pre>
+<ul>
+<li>Bigger logit → bigger probability, but <b>no action ever gets exactly 0</b>, so it keeps exploring a little by itself.</li>
+<li>Adding the same number to every logit changes nothing: [12, 11, 10] gives the same π. Only <b>differences</b> matter.</li>
+<li>Equal logits → equal probabilities: [0, 0, 0] → [1/3, 1/3, 1/3].</li>
+</ul>
+
+<h3>The gradient of log softmax (needed in chapter 05)</h3>
+<pre style="font-size:9.6pt">
+∂ log π(a) / ∂ h<sub>b</sub>  =  1 − π(b)    if b = a   (the chosen action)
+                        =   − π(b)    if b ≠ a   (every other action)
+</pre>
+<p>In words: raising the logit of the chosen action raises its log-probability (by 1 − π(a)); raising any other logit lowers it. For h = [0, 0, 0] and chosen action 1: ∇log π = [−1/3, +2/3, −1/3].</p>
+
+<!-- ═══════════ 05 ═══════════ -->
+<h2><span class="n">05</span>Maths II: the policy gradient</h2>
+<p class="sub">The maths: averages (expectation), derivatives and the chain rule for log.</p>
+
+<h3>Step 1: what we want to maximise</h3>
+<p>Start with a bandit (one decision, then the game ends). Expected reward under policy θ:</p>
+<pre style="font-size:9.6pt">
+J(θ) = Σ<sub>a</sub> π<sub>θ</sub>(a) · R(a)          "probability of each action × its average reward, added up"
+</pre>
+
+<h3>Step 2: take the derivative</h3>
+<pre style="font-size:9.6pt">
+∇J(θ) = Σ<sub>a</sub> ∇π<sub>θ</sub>(a) · R(a)          R(a) is the world's, it doesn't depend on θ
+</pre>
+<p>Problem: this needs R(a) for <b>every</b> action. But we only get to try one action per game, and we don't know R.</p>
+
+<h3>Step 3: the log-derivative trick</h3>
+<pre style="font-size:9.6pt">
+from school:  d/dx log f(x) = f′(x) / f(x)      so      ∇π = π · ∇log π
+
+∇J(θ) = Σ<sub>a</sub> π<sub>θ</sub>(a) · ∇log π<sub>θ</sub>(a) · R(a)
+      = average over actions drawn from π of [ R · ∇log π(a) ]        ← "Σ π(a) × something" is an average!
+</pre>
+<div class="box key"><span class="tag">Why this trick is everything</span>
+<p>An average over actions drawn from π can be estimated by <b>actually drawing actions from π</b>, i.e. by playing. So: roll your dice, get reward R, compute R·∇log π(a) for the action you took. On average, that points exactly uphill. No knowledge of R for other actions, no rule book.</p>
+</div>
+
+<h3>Step 4: the REINFORCE update</h3>
+<pre style="font-size:9.6pt">
+θ  ←  θ  +  α · G · ∇ log π<sub>θ</sub>(a | s)          for a whole game: add this up over every step t
+          ▲ step size  ▲ how good   ▲ "which way to turn the knobs to make action a more likely"
+</pre>
+
+<h3>Worked example 2: one bandit update (real output of <code>bandit_pg.py</code>)</h3>
+<pre>
+preferences h = [0, 0, 0]  →  π = [0.333, 0.333, 0.333]
+rolled the dice: picked arm 1, got reward r = 3.0
+∇log π(arm 1) = [−0.333, +0.667, −0.333]               (chapter 04's formula)
+no baseline:  h += 0.1 × 3.0 × ∇  → h = [−0.1, 0.2, −0.1]  → π = [0.299, 0.403, 0.299]
+</pre>
+<p>Arm 1 went from 33.3% to <b>40.3%</b>, and the other two went down to keep the total at 1. A bigger reward would have pushed harder.</p>
+
+<!-- ═══════════ 06 ═══════════ -->
+<h2><span class="n">06</span>Maths III: returns-to-go and the baseline</h2>
+<p class="sub">Two small changes that make REINFORCE far less noisy.</p>
+
+<h3>Returns-to-go: don't blame an action for the past</h3>
+<p>In a game with many steps, the action at step t can only affect rewards <b>from t onward</b>. So weight it by G<sub>t</sub>, not by the whole game's total:</p>
+<pre>
+G<sub>t</sub> = r<sub>t</sub> + γ·r<sub>t+1</sub> + γ²·r<sub>t+2</sub> + …      computed BACKWARDS, like Monte Carlo
+
+rewards 1, 1, 1 with γ = 0.9:
+  G<sub>3</sub> = 1
+  G<sub>2</sub> = 1 + 0.9 × 1    = 1.9
+  G<sub>1</sub> = 1 + 0.9 × 1.9  = 2.71
+</pre>
+<p>Yes, this is Monte Carlo (booklet 02): REINFORCE waits for the game to end, then walks backwards.</p>
+
+<h3>The baseline: compare with "normal"</h3>
+<p>In CartPole every reward is +1, so every G is positive, and without a baseline <b>every action gets pushed up</b>, the good ones just a bit more. That works on average but is very noisy. Subtract a baseline b, "what's a normal result?":</p>
+<pre style="font-size:9.6pt">
+θ  ←  θ  +  α · (G<sub>t</sub> − b) · ∇ log π(a<sub>t</sub> | s<sub>t</sub>)
+</pre>
+<p>Real output of <code>bandit_pg.py</code> part 1 (same pull: arm 1, r = 3.0):</p>
+<table>
+<tr><th>Baseline b</th><th>G − b</th><th>New π</th><th>What happened to arm 1</th></tr>
+<tr><td>0 (none)</td><td class="n">+3.0</td><td>[0.299, 0.403, 0.299]</td><td>pushed up a lot</td></tr>
+<tr><td>2.5</td><td class="n">+0.5</td><td>[0.328, 0.345, 0.328]</td><td>pushed up a little: "a bit better than normal"</td></tr>
+<tr><td>3.5</td><td class="n">−0.5</td><td>[0.339, 0.322, 0.339]</td><td><b>pushed down</b>: "3.0 is worse than normal"</td></tr>
+</table>
+
+<h3>Why the baseline doesn't change the answer, only the noise</h3>
+<pre>
+Average of b · ∇log π(a)  =  b · Σ<sub>a</sub> π(a)·∇log π(a)  =  b · Σ<sub>a</sub> ∇π(a)  =  b · ∇(Σ<sub>a</sub> π(a))  =  b · ∇(1)  =  0
+</pre>
+<p>The probabilities always add up to 1, and the derivative of a constant is 0. So subtracting b adds zero on average: same direction, much less jumping around.</p>
+
+<h3>Worked example 3: below-average results get pushed down</h3>
+<pre>
+CartPole-like: h = [0, 0] → π = [0.5, 0.5].  Pushed RIGHT, the return-to-go was G = 10.  α = 0.01
+∇log π(right) = [−0.5, +0.5]
+
+no baseline:   h += 0.01 × 10 × [−0.5, 0.5] = [−0.05, +0.05]   π(right) = e<sup>0.05</sup>/(e<sup>0.05</sup>+e<sup>−0.05</sup>) = 0.525
+baseline b=12: h += 0.01 × (10 − 12) × [−0.5, 0.5] = [+0.01, −0.01]   π(right) = 0.495
+</pre>
+
+
+<!-- ═══════════ 07 ═══════════ -->
+<h2><span class="n">07</span>The algorithm</h2>
+<figure>
+<svg viewBox="0 0 760 240" role="img" aria-label="REINFORCE loop: play whole game, compute returns, subtract baseline, update">
+  <defs><marker id="c7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="220" height="60" rx="5" class="bx"/><text x="130" y="44" text-anchor="middle" font-weight="700">1 · PLAY A WHOLE GAME</text><text x="130" y="64" text-anchor="middle" class="t-m">roll π's dice every step</text>
+  <line x1="240" y1="50" x2="268" y2="50" class="ln" marker-end="url(#c7)"/>
+  <rect x="270" y="20" width="220" height="60" rx="5" class="bx"/><text x="380" y="44" text-anchor="middle" font-weight="700">2 · REMEMBER</text><text x="380" y="64" text-anchor="middle" class="t-m">log π(a<tspan dy="3" font-size="9">t</tspan><tspan dy="-3">|s</tspan><tspan dy="3" font-size="9">t</tspan><tspan dy="-3">) and r</tspan><tspan dy="3" font-size="9">t</tspan></text>
+  <line x1="490" y1="50" x2="518" y2="50" class="ln" marker-end="url(#c7)"/>
+  <rect x="520" y="20" width="220" height="60" rx="5" class="bxa"/><text x="630" y="44" text-anchor="middle" font-weight="700">3 · RETURNS-TO-GO</text><text x="630" y="64" text-anchor="middle">G<tspan dy="3" font-size="9">t</tspan><tspan dy="-3">, walking backwards</tspan></text>
+  <line x1="630" y1="80" x2="630" y2="148" class="ln" marker-end="url(#c7)"/>
+  <rect x="520" y="150" width="220" height="60" rx="5" class="bxa"/><text x="630" y="174" text-anchor="middle" font-weight="700">4 · BASELINE</text><text x="630" y="194" text-anchor="middle">advantage = G<tspan dy="3" font-size="9">t</tspan><tspan dy="-3"> − b</tspan></text>
+  <line x1="520" y1="180" x2="492" y2="180" class="ln" marker-end="url(#c7)"/>
+  <rect x="270" y="150" width="220" height="60" rx="5" class="bx"/><text x="380" y="174" text-anchor="middle" font-weight="700">5 · LOSS</text><text x="380" y="194" text-anchor="middle">−Σ (G<tspan dy="3" font-size="9">t</tspan><tspan dy="-3"> − b)·log π</tspan></text>
+  <line x1="270" y1="180" x2="242" y2="180" class="ln" marker-end="url(#c7)"/>
+  <rect x="20" y="150" width="220" height="60" rx="5" class="bxg"/><text x="130" y="174" text-anchor="middle" font-weight="700">6 · GRADIENT STEP</text><text x="130" y="194" text-anchor="middle">backprop + Adam</text>
+  <line x1="130" y1="150" x2="130" y2="82" class="ln" marker-end="url(#c7)"/><text x="138" y="118" class="t-m">throw the game away, play a new one</text>
+</svg>
+<figcaption>Learning happens only after a game ends, once per game. Old games are never reused (on-policy).</figcaption>
+</figure>
+
+<h3>Pseudocode</h3>
+<pre>
+policy network π<sub>θ</sub>  (state → probabilities)
+for each game:
+    play until the end, sampling a<sub>t</sub> ~ π<sub>θ</sub>(·|s<sub>t</sub>);  store log π(a<sub>t</sub>|s<sub>t</sub>) and r<sub>t</sub>
+    G = 0;  for t = T … 1:  G = r<sub>t</sub> + γ·G;  G<sub>t</sub> = G           # returns-to-go, backwards
+    b = average of the G<sub>t</sub>                                       # simple baseline
+    loss = − Σ<sub>t</sub> (G<sub>t</sub> − b) · log π(a<sub>t</sub>|s<sub>t</sub>)                       # minus: descent = ascent on J
+    θ ← θ − lr · ∇loss                                                # backprop does ∇log π for us
+</pre>
+
+<!-- ═══════════ 08 ═══════════ -->
+<h2><span class="n">08</span>The code, line by line</h2>
+<p class="sub"><code>reinforce.py</code></p>
+
+<h3>① The policy network: state in, probabilities out</h3>
+<pre><span class="k">class</span> Policy(nn.Module):
+    <span class="k">def</span> __init__(self, n_inputs=4, n_actions=2, hidden=32):
+        super().__init__()
+        self.net = nn.Sequential(nn.Linear(n_inputs, hidden), nn.Tanh(), nn.Linear(hidden, n_actions))
+    <span class="k">def</span> forward(self, state):
+        logits = self.net(state)                      <span class="c"># raw scores, any size</span>
+        <span class="k">return</span> <span class="h">torch.softmax(logits, dim=-1)</span>          <span class="c"># probabilities: positive, add up to 1</span></pre>
+
+<h3>② Playing: roll the agent's own dice</h3>
+<pre>probs = policy(torch.as_tensor(s, dtype=torch.float32))
+dist = torch.distributions.Categorical(probs)
+a = dist.sample()                             <span class="c"># ROLL THE AGENT'S DICE</span>
+log_probs.append(dist.log_prob(a))            <span class="c"># remember log π(a|s): needed for the gradient</span></pre>
+
+<h3>③ Returns-to-go, backwards</h3>
+<pre>running = 0.0
+<span class="k">for</span> t <span class="k">in</span> reversed(range(len(rewards))):
+    running = rewards[t] + gamma * running
+    G[t] = running</pre>
+
+<h3>④ The update</h3>
+<pre>G = returns_to_go(rewards, gamma)
+<span class="k">if</span> baseline == <span class="c">"mean"</span>:
+    G = G - G.mean()                                     <span class="c"># better or worse than normal?</span>
+loss = <span class="h">-(torch.as_tensor(G) * torch.stack(log_probs)).sum()</span>
+optimizer.zero_grad()
+loss.backward()                                          <span class="c"># computes ∇log π for every weight</span>
+optimizer.step()                                         <span class="c"># θ ← θ + α·Σ (G_t − b)·∇log π</span></pre>
+
+<table>
+<tr><th style="width:30%">Line</th><th>Meaning</th></tr>
+<tr><td><code>torch.softmax</code></td><td>Chapter 04: logits → probabilities.</td></tr>
+<tr><td><code>dist.sample()</code></td><td>The agent picks by chance. No ε needed: the probabilities themselves explore.</td></tr>
+<tr><td><code>dist.log_prob(a)</code></td><td>log π(a|s) of the action actually taken. PyTorch remembers how it depends on θ.</td></tr>
+<tr><td><code>G - G.mean()</code></td><td>The baseline: this game's average return-to-go. Above average → push up, below → push down.</td></tr>
+<tr><td>the minus sign in <code>loss</code></td><td>Optimisers <i>minimise</i>. Minimising −J is the same as maximising J (gradient ascent).</td></tr>
+<tr><td><code>loss.backward()</code></td><td>Applies the chain rule through softmax and the network to get ∇log π for all weights at once.</td></tr>
+</table>
+
+<!--RESULTS-->
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>Real-world problems</h2>
+<div class="box plain"><span class="tag">When policy gradients fit</span>
+<p>✔ Randomness is part of the answer (games against opponents, exploration that must stay). ✔ Continuous or huge action spaces. ✔ You want to fine-tune an existing probabilistic model (a language model). ✘ Plain REINFORCE is too noisy and sample-hungry for most real problems: in practice people use its descendants, <b>A2C</b> (booklet 05) and <b>PPO</b> (booklet 06).</p>
+</div>
+
+<h3>1 · Fine-tuning a language model</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>the prompt plus the words written so far</td></tr>
+<tr><td><b>Action</b></td><td>the next word (token), chosen from the model's own probabilities</td></tr>
+<tr><td><b>Reward</b></td><td>at the end of the reply: a score for how good the whole answer was (from a reward model trained on human preferences, see booklet 09)</td></tr>
+<tr><td><b>Why policy gradient</b></td><td>A language model <b>already is</b> a softmax policy over words. Increasing log π of words in highly rated answers is exactly this booklet's update. InstructGPT-style training used PPO, a refined policy gradient.</td></tr>
+</table>
+
+<h3>2 · A robot arm reaching for an object</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>joint angles and speeds, object position (camera)</td></tr>
+<tr><td><b>Action</b></td><td>torque for each joint: <b>continuous</b> numbers. The policy outputs a mean and spread (a Gaussian) instead of softmax.</td></tr>
+<tr><td><b>Reward</b></td><td>−distance to the object each step, +10 when grasped</td></tr>
+<tr><td><b>Why</b></td><td>No max over infinitely many torques is needed: just roll the Gaussian dice and push up good actions. Pitfall: thousands of trials, so train in a simulator first.</td></tr>
+</table>
+
+<h3>3 · A pricing assistant that must keep testing</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>day of week, stock level, competitor price band</td></tr>
+<tr><td><b>Action</b></td><td>one of 5 discount levels, chosen with probabilities</td></tr>
+<tr><td><b>Reward</b></td><td>profit of the day</td></tr>
+<tr><td><b>Why</b></td><td>A stochastic policy naturally keeps trying other prices a little, and never collapses to one price you can't learn from. A baseline (normal daily profit) is essential, because profit is very noisy. This is a "could be used for" scenario.</td></tr>
+</table>
+
+<h3>4 · Game strategy against people</h3>
+<p>Rock-paper-scissors in this booklet, and in real games like poker: when an opponent can adapt, a predictable policy loses. Policy-gradient methods (combined with self-play) are a standard tool in research on such games, where learned strategies must mix their moves.</p>
+
+<!-- ═══════════ 12 ═══════════ -->
+<h2><span class="n">12</span>Side by side</h2>
+<table class="long">
+<tr><th style="width:22%"></th><th>Q-learning / DQN</th><th>REINFORCE</th><th>Actor-critic (A2C) / PPO</th></tr>
+<tr><td>Learns</td><td>scores Q(s,a)</td><td><b>probabilities π(a|s)</b></td><td>probabilities + a value V(s)</td></tr>
+<tr><td>Chooses an action by</td><td>argmax (+ ε random)</td><td>rolling its dice</td><td>rolling its dice</td></tr>
+<tr><td>Can learn a random policy?</td><td>no</td><td><b>yes</b></td><td>yes</td></tr>
+<tr><td>Continuous actions</td><td>no (needs max)</td><td><b>yes</b> (Gaussian policy)</td><td>yes</td></tr>
+<tr><td>Update uses</td><td>Bellman target (one step + guess)</td><td>the real return G (Monte Carlo)</td><td>advantage from a learned V (TD)</td></tr>
+<tr><td>Updates when</td><td>every step</td><td>after each whole game</td><td>every few steps</td></tr>
+<tr><td>Reuses old data?</td><td>yes (off-policy, replay)</td><td>no (on-policy)</td><td>no / a little (PPO: a few epochs)</td></tr>
+<tr><td>Noise of the update</td><td>low</td><td><b>high</b></td><td>medium (the critic helps)</td></tr>
+<tr><td>Main maths</td><td>Bellman, max</td><td>softmax, log-derivative trick</td><td>both</td></tr>
+</table>
+
+<!-- ═══════════ 13 ═══════════ -->
+<h2><span class="n">13</span>Clearing up the confusions</h2>
+<div class="qa"><div class="q">Does the policy network output an action, a value or probabilities?</div><p><b>Probabilities</b>, one per action, adding up to 1. The action comes from rolling dice with them. There is no Q-value anywhere in plain REINFORCE.</p></div>
+<div class="qa"><div class="q">Are these the same probabilities as FrozenLake's slipping?</div><p>No. π(a|s) is the <b>agent's own</b> choice probability, which it learns. Slipping is the <b>world's</b> behaviour, which it never learns directly and doesn't need to know.</p></div>
+<div class="qa"><div class="q">Is there a Bellman equation in REINFORCE?</div><p>No. It uses the real returns G (Monte Carlo), not "one step + a guess". The Bellman idea comes back in actor-critic (booklet 05) through the critic.</p></div>
+<div class="qa"><div class="q">Why log π and not π?</div><p>Because of the log-derivative trick: ∇π = π·∇log π turns the gradient into an average we can estimate by playing. Also, log turns the product of many small probabilities into a sum, which is numerically safer.</p></div>
+<div class="qa"><div class="q">If every CartPole reward is positive, won't every action be pushed up?</div><p>Without a baseline, yes, and that's why it's noisy. It still works on average because better actions get pushed up <i>more</i>. The baseline fixes it: only better-than-normal actions go up.</p></div>
+<div class="qa"><div class="q">Why is there a minus sign in the loss?</div><p>PyTorch's optimisers go downhill. We want to go uphill on reward, so we minimise −J.</p></div>
+<div class="qa"><div class="q">Does it need ε for exploration?</div><p>No. Softmax never gives exactly 0, so every action keeps some chance. But the probabilities can become very close to 0, so exploration can still die out (some methods add an "entropy bonus" to prevent that; see A2C/PPO).</p></div>
+<div class="qa"><div class="q">Why can't it reuse old games like DQN's replay buffer?</div><p>The gradient formula is an average over actions drawn from the <b>current</b> π. Old games were drawn from an older π, so they'd give the wrong average. (PPO fixes this partly with a probability ratio, booklet 06.)</p></div>
+<div class="qa"><div class="q">Which state's probabilities get updated?</div><p>Every (state, action) of the finished game, each weighted by its own G<sub>t</sub> − b. Because it's a network, nearby states change too.</p></div>
+<div class="qa"><div class="q">Why did the agent never settle against the spy?</div><p>Because the spy keeps adapting: whatever you favour, it counters. Two learners chasing each other often cycle. The ideal answer (1/3 each) is a balance point that plain REINFORCE keeps overshooting.</p></div>
+
+
+<!-- ═══════════ 14 ═══════════ -->
+<h2><span class="n">14</span>Practice problems</h2>
+<ol>
+<li><b>Softmax.</b> Compute π for logits [1, 1, 0]. (e ≈ 2.718)</li>
+<li><b>Shift.</b> Without calculating, what is softmax([101, 101, 100])?</li>
+<li><b>Gradient of log softmax.</b> π = [0.2, 0.5, 0.3], chosen action 2. Write ∇log π with respect to the three logits.</li>
+<li><b>One update.</b> Logits [0, 0], chosen action 0, G = 4, b = 0, α = 0.1. New logits and new π(0)?</li>
+<li><b>Baseline.</b> Same as 4 but b = 6. Which way does π(0) move?</li>
+<li><b>Returns-to-go.</b> Rewards 0, 0, 2, 1 with γ = 0.5. Compute G<sub>1</sub> … G<sub>4</sub>.</li>
+<li><b>Proof idea.</b> Show that Σ<sub>a</sub> π(a)·∇log π(a) = 0. (Hint: chapter 06.)</li>
+<li><b>Expected reward.</b> A bandit's arms pay 1, 2 and 1.5 on average. π = [0.2, 0.5, 0.3]. What is J?</li>
+<li><b>Conceptual.</b> Give one game where the best policy is deterministic and one where it must be random.</li>
+<li><b>Conceptual.</b> Why does REINFORCE have to wait for the end of the game, while Q-learning doesn't?</li>
+<li><b>Coding.</b> In <code>bandit_pg.py</code>, set α = 0.5. Predict: faster learning, or more runs ending on a wrong arm? Run it.</li>
+<li><b>Coding.</b> In <code>cartpole.py</code>, add a variant with <code>hidden=8</code>. Will the smaller network learn faster or slower?</li>
+</ol>
+
+<!-- ═══════════ 15 ═══════════ -->
+<h2><span class="n">15</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\04_policy_gradient
+python bandit_pg.py      <span class="c"># softmax policy on a 3-armed bandit, with/without baseline   (seconds)</span>
+python rps.py            <span class="c"># rock-paper-scissors: why random can be best                 (seconds)</span>
+python cartpole.py       <span class="c"># REINFORCE on CartPole, 3 variants × 3 seeds                  (~5-8 min)</span>
+<span class="c"># add --no-show to save the charts without opening windows</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">REINFORCE in 9 lines</span>
+<pre style="background:#fff;margin:6px 0">π_θ = network → softmax
+for each game:
+  play to the end, a ~ π_θ(·|s)
+  store log π(a|s), r
+  G_t = r_t + γ G_t+1  (backwards)
+  b = mean(G_t)
+  loss = −Σ (G_t − b)·log π(a_t|s_t)
+  backprop; optimizer step
+  forget the game</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">Key formulas</span>
+<pre style="background:#fff;margin:6px 0">softmax: π_a = e^h_a / Σ e^h
+∂log π_a/∂h_b = 1[a=b] − π_b
+trick:   ∇π = π ∇log π
+∇J = avg[ G · ∇log π(a|s) ]
+update:  θ += α (G_t − b) ∇log π
+baseline adds 0 on average</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>Policy-based methods learn the action probabilities π(a|s) directly and play by rolling their own dice.</li>
+<li>The log-derivative trick turns "the gradient of expected reward" into an average we can estimate by playing: G·∇log π.</li>
+<li>REINFORCE pushes up actions followed by better-than-normal returns and pushes down the rest; the baseline defines "normal".</li>
+<li>It's a Monte Carlo method: unbiased but noisy, and on-policy (old games can't be reused).</li>
+</ol>
+</div>
+
+<!-- ═══════════ 16 ═══════════ -->
+<h2><span class="n">16</span>Answers</h2>
+<ol>
+<li>e<sup>1</sup> = 2.718, e<sup>1</sup> = 2.718, e<sup>0</sup> = 1; total 6.436. π = [<b>0.422, 0.422, 0.155</b>].</li>
+<li>Same as softmax([1, 1, 0]) (only differences matter): <b>[0.422, 0.422, 0.155]</b>.</li>
+<li>∇log π = [−0.2, −0.5, 1 − 0.3] = <b>[−0.2, −0.5, +0.7]</b>.</li>
+<li>π = [0.5, 0.5], ∇log π(0) = [0.5, −0.5]. h += 0.1 × 4 × [0.5, −0.5] = <b>[0.2, −0.2]</b>. π(0) = e<sup>0.2</sup>/(e<sup>0.2</sup>+e<sup>−0.2</sup>) = 1/(1+e<sup>−0.4</sup>) ≈ <b>0.599</b>.</li>
+<li>G − b = −2: h += 0.1 × (−2) × [0.5, −0.5] = [−0.1, +0.1]. π(0) ≈ 1/(1+e<sup>0.2</sup>) ≈ <b>0.450</b>: it moves <b>down</b>.</li>
+<li>Backwards: G<sub>4</sub> = 1; G<sub>3</sub> = 2 + 0.5 × 1 = 2.5; G<sub>2</sub> = 0 + 0.5 × 2.5 = 1.25; G<sub>1</sub> = 0 + 0.5 × 1.25 = <b>0.625</b>.</li>
+<li>Σ π·∇log π = Σ π·(∇π/π) = Σ ∇π = ∇(Σ π) = ∇(1) = <b>0</b>.</li>
+<li>J = 0.2×1 + 0.5×2 + 0.3×1.5 = 0.2 + 1.0 + 0.45 = <b>1.65</b>.</li>
+<li>Deterministic is fine: CartPole, FrozenLake, Taxi (the world doesn't adapt to you). Must be random: rock-paper-scissors, penalty kicks in football, bluffing in poker.</li>
+<li>Its weight G<sub>t</sub> is the real total of future rewards, which is only known once the game is over. Q-learning uses r + γ·(a guess), available after one step.</li>
+<li>Prediction: faster at first, but bigger, noisier jumps, so more runs can lock onto a wrong arm early. Run it to see the count of "wrong arm" runs.</li>
+<li>A reasonable guess: it can still learn CartPole (the rule is simple), maybe more slowly or less reliably. Run it and compare the last-100 averages.</li>
+</ol>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Actor-Critic and A2C</title>
+<style>
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --ink:#151B2F; --muted:#5B647A; --line:#D6DCE7;
+  --accent:#2C4BD1; --accent-soft:#E8ECFB; --gold:#A86A08; --gold-soft:#FBF3E2;
+  --good:#1E8A5A; --good-soft:#E3F3EA; --bad:#C2413A; --bad-soft:#FBE7E5; --code:#F1F3F8;
+  --f-body:"Segoe UI", system-ui, sans-serif;
+  --f-mono:Consolas, "Cascadia Mono", monospace;
+}
+@page{size:A4;margin:15mm 15mm 16mm}
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:10.6pt;line-height:1.55;margin:0}
+main{max-width:180mm;margin:0 auto}
+h1{font-size:30pt;line-height:1.05;margin:0 0 8px;font-weight:800;letter-spacing:-.01em}
+h2{font-size:19pt;line-height:1.15;margin:0 0 4px;font-weight:800;break-before:page;padding-top:2px}
+h2 .n{font-family:var(--f-mono);font-size:11pt;color:var(--accent);vertical-align:4pt;margin-right:8px}
+h3{font-size:13pt;margin:18px 0 6px;font-weight:700;break-after:avoid}
+h4{font-size:11pt;margin:12px 0 4px;break-after:avoid}
+.sub{color:var(--muted);margin:0 0 12px;font-size:11pt}
+p{margin:0 0 9px}
+ul,ol{margin:0 0 9px;padding-left:1.3em}
+li{margin-bottom:3px}
+code{font-family:var(--f-mono);font-size:.9em;background:var(--code);padding:0 4px;border-radius:3px}
+pre{font-family:var(--f-mono);font-size:8.6pt;line-height:1.45;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin:0 0 10px;white-space:pre-wrap;break-inside:avoid}
+pre .c{color:#5B647A}
+pre .k{color:var(--accent);font-weight:700}
+pre .h{background:#FFF0C2}
+.box{padding:10px 13px;margin:10px 0;border-radius:5px;break-inside:avoid}
+.box > :last-child{margin-bottom:0}
+.tag{display:block;font-family:var(--f-mono);font-size:8pt;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;font-weight:700}
+.plain{background:var(--accent-soft)} .plain .tag{color:var(--accent)}
+.key{border:2px solid var(--ink)} .key .tag{color:var(--ink)}
+.warn{background:var(--gold-soft);border:1px solid #E6CC97} .warn .tag{color:var(--gold)}
+.ok{background:var(--good-soft)} .ok .tag{color:var(--good)}
+table{border-collapse:collapse;width:100%;font-size:9.6pt;margin:6px 0 12px;break-inside:avoid}
+table.long{break-inside:auto} table.long tr{break-inside:avoid}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:8pt;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#F5F6FA}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+figure{margin:10px 0 14px;break-inside:avoid}
+figure svg{display:block;width:100%;height:auto}
+figure img{display:block;width:100%;border:1px solid var(--line);border-radius:4px}
+figcaption{font-size:9pt;color:var(--muted);margin-top:5px}
+svg text{font-family:var(--f-body);font-size:13px;fill:currentColor}
+svg .t-m{fill:#5B647A} svg .t-a{fill:#2C4BD1;font-weight:700} svg .t-g{fill:#1E8A5A;font-weight:700} svg .t-b{fill:#C2413A;font-weight:700}
+svg .t-h{font-weight:700;font-size:12px;letter-spacing:.06em}
+svg .bx{fill:#fff;stroke:#151B2F;stroke-width:1.4}
+svg .bxa{fill:#E8ECFB;stroke:#2C4BD1;stroke-width:1.6}
+svg .bxg{fill:#E3F3EA;stroke:#1E8A5A;stroke-width:1.6}
+svg .ln{fill:none;stroke:#151B2F;stroke-width:1.5}
+svg .lna{fill:none;stroke:#2C4BD1;stroke-width:2.2}
+svg .lnd{fill:none;stroke:#9AA3B9;stroke-width:1.4;stroke-dasharray:5 4}
+
+/* gridworld boards */
+.boards{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px;break-inside:avoid}
+.board{break-inside:avoid}
+.board .cap{font-family:var(--f-mono);font-size:8pt;color:var(--muted);margin-bottom:3px}
+table.gw{width:auto;border-collapse:separate;border-spacing:2px;margin:0;font-family:var(--f-mono);font-size:8pt}
+table.gw td{width:40px;height:30px;padding:0;text-align:center;vertical-align:middle;border:1px solid var(--line);border-radius:3px;line-height:1.1}
+table.gw.big td{width:62px;height:46px;font-size:9.5pt}
+table.gw.big td b{display:block;font-size:13pt;font-family:var(--f-body)}
+td.wall{background:repeating-linear-gradient(45deg,#D6DCE7 0 3px,#fff 3px 7px)}
+td.G{background:#2E9E68;color:#fff;font-weight:700} td.P{background:#D2564F;color:#fff;font-weight:700}
+td.H{background:#1F3B57;color:#fff;font-weight:700}
+td.g3{background:#8ED1AE} td.g2{background:#B9E3CB} td.g1{background:#E3F3EA} td.ng{background:#FBE7E5}
+td.new{outline:2px solid var(--accent);outline-offset:-2px}
+td.ice{background:#DDEEFF}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cover{height:240mm;display:flex;flex-direction:column;justify-content:center}
+.eyebrow{font-family:var(--f-mono);font-size:9pt;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:13pt;color:var(--muted);max-width:150mm}
+.toc{margin-top:26px;columns:2;column-gap:24px;font-size:10.5pt}
+.toc div{break-inside:avoid;padding:3px 0;border-bottom:1px solid var(--line)}
+.toc span{font-family:var(--f-mono);color:var(--accent);margin-right:8px}
+.qa{border-left:3px solid var(--accent);padding:4px 0 4px 12px;margin:0 0 12px;break-inside:avoid}
+.qa .q{font-weight:700;margin-bottom:3px}
+.qa .q::before{content:"Q. ";color:var(--accent)}
+.wrong{color:var(--bad);font-weight:700} .right{color:var(--good);font-weight:700}
+</style>
+</head>
+<body>
+<main>
+
+<!-- ═══════════ COVER ═══════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Booklet 05</div>
+  <h1>Actor-Critic<br>and A2C</h1>
+  <p class="lede">A player and a coach learning together. The <b>actor</b> chooses moves with probabilities (policy-based); the <b>critic</b> learns how good each situation is (value-based, Bellman). Each one makes the other better. Every number comes from code in <code>rl_topics/05_actor_critic_a2c</code>.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture</div>
+    <div><span>02</span>Words you need</div>
+    <div><span>03</span>Intuition: player and coach</div>
+    <div><span>04</span>Recap: REINFORCE and its problem</div>
+    <div><span>05</span>The maths: advantage and TD error</div>
+    <div><span>06</span>Worked by hand: four updates</div>
+    <div><span>07</span>Entropy and n-step returns</div>
+    <div><span>08</span>The algorithm (A2C)</div>
+    <div><span>09</span>The code, line by line</div>
+    <div><span>10</span>Running it: CartPole</div>
+    <div><span>11</span>Experiments</div>
+    <div><span>12</span>Real-world problems</div>
+    <div><span>13</span>Side by side</div>
+    <div><span>14</span>Clearing up the confusions</div>
+    <div><span>15</span>Practice problems</div>
+    <div><span>16</span>Run it yourself + cheat sheet</div>
+    <div><span>17</span>Answers</div>
+  </div>
+</section>
+
+<!-- ═══════════ 01 ═══════════ -->
+<h2><span class="n">01</span>The big picture</h2>
+<p class="sub">Value-based and policy-based, finally working together.</p>
+
+<p>You now know both families of RL:</p>
+<ul>
+<li><b>Value-based</b> (Q-learning, DQN): learn how good things are, using the Bellman equation. Low noise, learns every step, but can't hold a random or continuous policy.</li>
+<li><b>Policy-based</b> (REINFORCE): learn the action probabilities directly. Flexible, but very noisy, and must wait for each game to end.</li>
+</ul>
+<p><b>Actor-critic</b> uses one of each, as two cooperating networks:</p>
+
+<figure>
+<svg viewBox="0 0 760 220" role="img" aria-label="Actor chooses actions; environment returns reward and next state; critic computes TD error which trains both">
+  <defs><marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="30" width="200" height="64" rx="6" class="bxa"/><text x="120" y="56" text-anchor="middle" font-weight="700">ACTOR  π(a|s)</text><text x="120" y="78" text-anchor="middle" class="t-m">the player: probabilities</text>
+  <rect x="540" y="30" width="200" height="64" rx="6" class="bx"/><text x="640" y="56" text-anchor="middle" font-weight="700">GAME</text><text x="640" y="78" text-anchor="middle" class="t-m">env.step(a)</text>
+  <rect x="280" y="140" width="200" height="64" rx="6" class="bxg"/><text x="380" y="166" text-anchor="middle" font-weight="700">CRITIC  V(s)</text><text x="380" y="188" text-anchor="middle" class="t-m">the coach: values (Bellman)</text>
+  <line x1="220" y1="52" x2="538" y2="52" class="ln" marker-end="url(#d1)"/><text x="380" y="44" text-anchor="middle">action a (rolled from π)</text>
+  <path d="M640,94 V172 H482" class="ln" marker-end="url(#d1)"/><text x="648" y="135" class="t-m">r, s′</text>
+  <path d="M280,172 H120 V96" class="lna" marker-end="url(#d1)"/><text x="200" y="164" text-anchor="middle" class="t-a">advantage δ</text>
+  <text x="200" y="182" text-anchor="middle" class="t-m">"better or worse</text><text x="200" y="196" text-anchor="middle" class="t-m">than I expected"</text>
+</svg>
+<figcaption>The critic turns each step into a verdict, δ = r + γV(s′) − V(s): the same "surprise" as Q-learning's update. The actor uses that verdict instead of waiting for the whole game's return.</figcaption>
+</figure>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p>The <b>actor</b> picks actions with probabilities; the <b>critic</b> learns V(s) with a Bellman target; after every few steps the critic's surprise, δ = r + γV(s′) − V(s), tells the actor "that move was better (δ &gt; 0) or worse (δ &lt; 0) than usual", and the actor raises or lowers its probability accordingly.</p>
+</div>
+
+<p><b>A2C</b> ("Advantage Actor-Critic") is the standard, simple version: several copies of the game run side by side, and both networks learn from all of them every few steps. Its relative <b>A3C</b> ran the copies on different computer threads that updated at different times (asynchronously); A2C waits for all of them, which is simpler and works just as well.</p>
+
+<!-- ═══════════ 02 ═══════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<table class="long">
+<tr><th style="width:24%">Term</th><th>Meaning in plain words</th><th style="width:27%">In your code</th></tr>
+<tr><td><b>Actor</b></td><td>The policy network π(a|s): outputs action probabilities. The player.</td><td><code>model.actor</code> (logits)</td></tr>
+<tr><td><b>Critic</b></td><td>The value network V(s): "how much total reward from here?" The coach.</td><td><code>model.critic</code></td></tr>
+<tr><td><b>Advantage</b> A(s,a)</td><td>How much better this action turned out than the critic expected for this state.</td><td><code>advantage = returns - values</code></td></tr>
+<tr><td><b>TD error</b> δ</td><td>r + γV(s′) − V(s): one-step estimate of the advantage. Same as Q-learning's surprise.</td><td>n = 1 case</td></tr>
+<tr><td><b>Bootstrapping</b></td><td>Using the critic's guess V(s′) instead of waiting for the real end.</td><td><code>R = model.value(obs)</code></td></tr>
+<tr><td><b>n-step return</b></td><td>n real rewards, then the critic's guess for the rest.</td><td><code>n_steps=5</code></td></tr>
+<tr><td><b>Entropy</b> H</td><td>How unsure the actor is: −Σ π·ln π. 0.693 for 50/50, near 0 when certain.</td><td><code>dist.entropy()</code></td></tr>
+<tr><td><b>Entropy bonus</b></td><td>Reward the actor a little for staying unsure, so it keeps exploring.</td><td><code>ent_coef=0.01</code></td></tr>
+<tr><td><b>Actor loss</b></td><td>−(log π × advantage): REINFORCE's loss with the advantage in place of G.</td><td><code>actor_loss</code></td></tr>
+<tr><td><b>Critic loss</b></td><td>(target − V)²: squared error, like DQN's loss.</td><td><code>critic_loss</code></td></tr>
+<tr><td><b>Vectorised envs</b></td><td>Several copies of the game stepping together; more varied data per update.</td><td><code>gym.make_vec(..., num_envs=8)</code></td></tr>
+<tr><td><b>Shared body</b></td><td>Actor and critic share their first layers and have separate "heads".</td><td><code>shared=True</code></td></tr>
+<tr><td><b>.detach()</b></td><td>"Treat this number as a constant here." Stops the actor's loss from changing the critic.</td><td><code>advantage.detach()</code></td></tr>
+<tr><td><b>Truncated vs terminated</b></td><td>Time limit vs a real end. After a time limit the future still counts, so add γV(last state).</td><td><code>info["final_obs"]</code></td></tr>
+</table>
+
+<!-- ═══════════ 03 ═══════════ -->
+<h2><span class="n">03</span>Intuition: player and coach</h2>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">REINFORCE: waits for the final result</span>
+<p>A batsman plays a whole match. Only at the end does someone say "we lost, so every shot you played today was a bit bad". A great cover drive in a lost match gets blamed. A lucky edge in a won match gets praised. Very noisy feedback.</p></div>
+<div class="box ok" style="margin:0"><span class="tag">Actor-critic: a coach watching every ball</span>
+<p>A coach knows what's "normal" from each situation. After each shot: "from there, I expected about 20 more runs; after that shot I now expect 26. That shot was <b>+6 better</b> than normal." Immediate, specific, much less noisy.</p></div>
+</div>
+
+<p style="margin-top:10px">The coach (critic) also learns: it adjusts its expectations from what actually happens, with the same TD update you used in booklet 01. And it never chooses moves; it only judges them.</p>
+
+<h3>Why the coach must be fair: the advantage</h3>
+<p>In CartPole every step gives +1, so raw rewards say "everything is good". The advantage asks a better question: <b>"better than what I expected from here?"</b> A move that leads from a calm state (V = 100) into a wobbly one (V = 60) gets a negative advantage even though it earned +1.</p>
+
+<!-- ═══════════ 04 ═══════════ -->
+<h2><span class="n">04</span>Recap: REINFORCE and its problem</h2>
+<p class="sub">Booklet 04 in one page.</p>
+
+<pre style="font-size:9.6pt">
+policy π<sub>θ</sub>(a|s) = softmax(network(s))              probabilities, rolled like dice
+REINFORCE:  θ ← θ + α · (G<sub>t</sub> − b) · ∇log π<sub>θ</sub>(a<sub>t</sub>|s<sub>t</sub>)     after each finished game
+            ▲ the real return-to-go minus a baseline
+</pre>
+<ul>
+<li><b>Good:</b> unbiased (uses real returns), handles random and continuous policies.</li>
+<li><b>Problem 1, noise:</b> G<sub>t</sub> adds up every reward until the end, including luck that had nothing to do with action a<sub>t</sub>.</li>
+<li><b>Problem 2, waiting:</b> nothing is learned until the game ends. In a 500-step game, that's 500 steps of no learning.</li>
+<li><b>Problem 3, a weak baseline:</b> "the average return of this game" is the same number for every state, but some states are much better than others.</li>
+</ul>
+
+<div class="box key"><span class="tag">The fix, in one line</span>
+<p>Replace (G<sub>t</sub> − b) with an estimate of the <b>advantage</b> that uses a learned, state-specific baseline V(s):</p>
+<pre style="background:#fff;margin:6px 0">G<sub>t</sub> − b   →   r + γ·V(s′) − V(s)   =  δ   (TD error)</pre>
+<p>V(s) is a far better baseline than one average for the whole game, and using V(s′) means we can learn after <b>one step</b> instead of waiting for the end.</p>
+</div>
+
+<!-- ═══════════ 05 ═══════════ -->
+<h2><span class="n">05</span>The maths: advantage and TD error</h2>
+<p class="sub">Two losses, one network update.</p>
+
+<h3>The advantage</h3>
+<pre style="font-size:9.6pt">
+A(s, a)  =  Q(s, a)  −  V(s)
+            ▲ value of doing a here    ▲ value of here, on average over the actor's choices
+</pre>
+<p>A &gt; 0: a was better than the actor's average move here. A &lt; 0: worse. A2C never learns Q; it estimates A from real rewards plus the critic:</p>
+<pre style="font-size:9.6pt">
+1-step:  A ≈ δ = r + γ·V(s′) − V(s)                     (V(s′) = 0 if the game really ended)
+n-step:  A ≈ r<sub>1</sub> + γ·r<sub>2</sub> + … + γ<sup>n−1</sup>·r<sub>n</sub> + γ<sup>n</sup>·V(s<sub>n</sub>) − V(s)
+</pre>
+
+<h3>The critic's update (a TD / regression problem)</h3>
+<pre style="font-size:9.6pt">
+critic loss = ( target − V(s) )²          target = r + γ·V(s′)   (or the n-step version)
+gradient step  ≈  V(s) ← V(s) + α · δ     exactly TD(0) from booklet 01
+</pre>
+
+<h3>The actor's update (REINFORCE with the advantage)</h3>
+<pre style="font-size:9.6pt">
+actor loss = − log π(a|s) · A            (A is treated as a constant: .detach())
+gradient step:  θ ← θ + α · A · ∇log π(a|s)
+for a softmax actor:  ∇<sub>h</sub> log π(a) = one_hot(a) − π       (booklet 04, chapter 04)
+</pre>
+
+<h3>Total loss (what the code minimises)</h3>
+<pre style="font-size:9.6pt">
+loss = actor_loss  +  0.5 × critic_loss  −  0.01 × entropy
+       ▲ improve π    ▲ improve V            ▲ stay a bit unsure (chapter 07)
+</pre>
+
+<div class="box plain"><span class="tag">Which school maths?</span>
+<p>Squared error and its derivative (the critic), log and the chain rule (the actor), and the exponential inside softmax. Nothing new beyond booklets 03 and 04: actor-critic is their combination.</p>
+</div>
+
+<!-- ═══════════ 06 ═══════════ -->
+<h2><span class="n">06</span>Worked by hand: four updates</h2>
+<p class="sub">Real output of <code>python hand_example.py</code>. A tiny actor (2 preferences → softmax), a critic that's just a number per state, learning rate α = 0.1. The script also checks every result with PyTorch's autograd: all four <b>match</b>.</p>
+
+<h3>Example 1: better than expected (δ &gt; 0), actor starts 50/50</h3>
+<pre>
+GIVEN   h = [0, 0] → π = [0.5, 0.5].   V(s) = 0.5,  V(s′) = 0.6,  r = 1.0,  γ = 0.9.  took RIGHT
+STEP 1  target = r + γ·V(s′) = 1.0 + 0.9 × 0.6 = 1.54        δ = 1.54 − 0.5 = <b>+1.04</b>
+STEP 2  critic: V(s) ← 0.5 + 0.1 × 1.04 = 0.604
+STEP 3  ∇log π(right) = one_hot − π = [−0.5, +0.5]
+        h ← h + 0.1 × 1.04 × [−0.5, 0.5] = [−0.052, +0.052]
+        π(right): 0.5000 → <b>0.5260</b>
+</pre>
+
+<h3>Example 2: worse than expected, a COMMON action (80%)</h3>
+<pre>
+GIVEN   π = [0.8, 0.2].   V(s) = 2.0,  V(s′) = 1.5,  r = 0,  γ = 0.9.  took LEFT (the 80% action)
+        target = 0 + 0.9 × 1.5 = 1.35        δ = 1.35 − 2.0 = <b>−0.65</b>
+        critic: V(s) ← 2.0 − 0.065 = 1.935
+        ∇log π(left) = [+0.2, −0.2]       π(left): 0.8000 → <b>0.7958</b>   (−0.0042)
+</pre>
+
+<h3>Example 3: better than expected, a RARE action (20%)</h3>
+<pre>
+GIVEN   π = [0.8, 0.2].   V(s) = 2.0,  V(s′) = 3.0,  r = 0.  took RIGHT (the 20% action)
+        target = 0.9 × 3.0 = 2.70        δ = <b>+0.70</b>
+        ∇log π(right) = [−0.8, +0.8]      π(right): 0.2000 → <b>0.2185</b>   (+0.0185)
+</pre>
+<p>Compare examples 2 and 3: the <b>rare</b> action moved more than 4× as much as the common one (0.0185 vs 0.0042) for a similar-sized δ. ∇log π = one_hot − π is large when π(a) is small: a surprise from a rarely chosen action is big news.</p>
+
+<h3>Example 4: the game ENDS (terminated)</h3>
+<pre>
+GIVEN   π = [0.5, 0.5].  V(s) = 0.5,  V(s′) = 9.9 (ignored!),  r = −1.  took LEFT, the game ended
+        target = r = −1.0 (no future)      δ = −1.0 − 0.5 = <b>−1.5</b>
+        critic: V(s) ← 0.5 − 0.15 = 0.35       π(left): 0.5000 → <b>0.4626</b>
+</pre>
+
+<!-- ═══════════ 07 ═══════════ -->
+<h2><span class="n">07</span>Entropy and n-step returns</h2>
+
+<h3>Entropy: how unsure is the actor?</h3>
+<pre style="font-size:9.6pt">
+H(π) = − Σ<sub>a</sub> π(a) · ln π(a)
+
+π = [0.50, 0.50]   H = 0.693    (fully unsure: ln 2)
+π = [0.60, 0.40]   H = 0.673
+π = [0.80, 0.20]   H = 0.500
+π = [0.90, 0.10]   H = 0.325
+π = [0.99, 0.01]   H = 0.056    (almost certain)
+</pre>
+<p>Check one: H(0.8, 0.2) = −(0.8 × ln 0.8 + 0.2 × ln 0.2) = −(0.8 × (−0.223) + 0.2 × (−1.609)) = 0.178 + 0.322 = <b>0.500</b>.</p>
+<p>The loss subtracts 0.01 × H, so the actor gets a small reward for staying unsure. It stops the actor from becoming 100% certain too early and never trying the other move again: the job ε did in Q-learning.</p>
+
+<h3>n-step returns: how far to look before trusting the critic</h3>
+<p>Real output: 3 rewards of +1, then the critic's guess V(s<sub>3</sub>) = 5.0, γ = 0.9, built backwards:</p>
+<pre>
+R<sub>2</sub> = r<sub>2</sub> + 0.9 × V(s<sub>3</sub>)  = 1 + 0.9 × 5.00 = 5.500
+R<sub>1</sub> = r<sub>1</sub> + 0.9 × R<sub>2</sub>     = 1 + 0.9 × 5.50 = 5.950
+R<sub>0</sub> = r<sub>0</sub> + 0.9 × R<sub>1</sub>     = 1 + 0.9 × 5.95 = 6.355
+</pre>
+<table>
+<tr><th>n</th><th>uses</th><th>noise</th><th>bias (from a wrong critic)</th></tr>
+<tr><td>1</td><td>1 real reward + guess</td><td>lowest</td><td>highest</td></tr>
+<tr><td>5 (our default)</td><td>5 real rewards + guess</td><td>medium</td><td>medium</td></tr>
+<tr><td>∞</td><td>all real rewards (REINFORCE)</td><td>highest</td><td>none</td></tr>
+</table>
+<p>The same dial as n-step TD in booklet 01. PPO's GAE (booklet 06) blends all n at once.</p>
+
+<!-- ═══════════ 08 ═══════════ -->
+<h2><span class="n">08</span>The algorithm (A2C)</h2>
+<figure>
+<svg viewBox="0 0 760 240" role="img" aria-label="A2C loop">
+  <defs><marker id="d8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="220" height="60" rx="5" class="bx"/><text x="130" y="44" text-anchor="middle" font-weight="700">1 · PLAY 5 STEPS</text><text x="130" y="64" text-anchor="middle" class="t-m">in all 8 game copies</text>
+  <line x1="240" y1="50" x2="268" y2="50" class="ln" marker-end="url(#d8)"/>
+  <rect x="270" y="20" width="220" height="60" rx="5" class="bx"/><text x="380" y="44" text-anchor="middle" font-weight="700">2 · BOOTSTRAP</text><text x="380" y="64" text-anchor="middle" class="t-m">critic's V(last state)</text>
+  <line x1="490" y1="50" x2="518" y2="50" class="ln" marker-end="url(#d8)"/>
+  <rect x="520" y="20" width="220" height="60" rx="5" class="bxa"/><text x="630" y="44" text-anchor="middle" font-weight="700">3 · n-STEP RETURNS</text><text x="630" y="64" text-anchor="middle">built backwards</text>
+  <line x1="630" y1="80" x2="630" y2="148" class="ln" marker-end="url(#d8)"/>
+  <rect x="520" y="150" width="220" height="60" rx="5" class="bxa"/><text x="630" y="174" text-anchor="middle" font-weight="700">4 · ADVANTAGE</text><text x="630" y="194" text-anchor="middle">A = return − V(s)</text>
+  <line x1="520" y1="180" x2="492" y2="180" class="ln" marker-end="url(#d8)"/>
+  <rect x="270" y="150" width="220" height="60" rx="5" class="bx"/><text x="380" y="174" text-anchor="middle" font-weight="700">5 · LOSSES</text><text x="380" y="194" text-anchor="middle">actor + 0.5·critic − 0.01·H</text>
+  <line x1="270" y1="180" x2="242" y2="180" class="ln" marker-end="url(#d8)"/>
+  <rect x="20" y="150" width="220" height="60" rx="5" class="bxg"/><text x="130" y="174" text-anchor="middle" font-weight="700">6 · ONE GRADIENT STEP</text><text x="130" y="194" text-anchor="middle">both networks</text>
+  <line x1="130" y1="150" x2="130" y2="82" class="ln" marker-end="url(#d8)"/><text x="138" y="118" class="t-m">repeat: 8 × 5 = 40 new steps per update</text>
+</svg>
+<figcaption>Learning happens every 5 steps, not once per game. The games keep running across updates.</figcaption>
+</figure>
+
+<h3>Pseudocode</h3>
+<pre>
+actor π<sub>θ</sub>, critic V<sub>φ</sub>;   start 8 copies of the game
+repeat:
+    for 5 steps, in every copy:  a ~ π(·|s);  s′, r = step(a);  store log π(a|s), V(s), r, ended
+    R = V(s<sub>last</sub>)                                      # bootstrap from the critic
+    for t = 5 … 1:   R = r<sub>t</sub> + γ·R·(1 − ended<sub>t</sub>);  return<sub>t</sub> = R
+    A<sub>t</sub> = return<sub>t</sub> − V(s<sub>t</sub>)
+    loss = mean(−log π(a<sub>t</sub>|s<sub>t</sub>)·A<sub>t</sub>) + 0.5·mean(A<sub>t</sub>²) − 0.01·mean(H)
+    one gradient step on θ and φ
+</pre>
+
+<!-- ═══════════ 09 ═══════════ -->
+<h2><span class="n">09</span>The code, line by line</h2>
+<p class="sub"><code>a2c.py</code>: <code>train_a2c()</code></p>
+
+<h3>① Play n steps in all copies</h3>
+<pre><span class="k">for</span> _ <span class="k">in</span> range(n_steps):
+    logits, v = model(to_t(obs))                         <span class="c"># actor AND critic look at all 8 states</span>
+    dist = torch.distributions.Categorical(logits=logits)
+    a = dist.sample()                                    <span class="c"># actor ROLLS a die</span>
+    obs, r, terminated, truncated, info = envs.step(a.numpy())
+    <span class="k">if</span> truncated.any():                                  <span class="c"># time limit: the future still counts</span>
+        <span class="k">for</span> i <span class="k">in</span> np.flatnonzero(truncated &amp; ~terminated):
+            r[i] += gamma * model.value(to_t(info[<span class="c">"final_obs"</span>][i])).item()
+    logps.append(dist.log_prob(a)); values.append(v); ents.append(dist.entropy())</pre>
+
+<h3>② n-step returns, backwards from the critic's guess</h3>
+<pre><span class="k">with</span> torch.no_grad():
+    R = model.value(to_t(obs))                           <span class="c"># bootstrap: V(state we stopped in)</span>
+<span class="k">for</span> t <span class="k">in</span> reversed(range(n_steps)):
+    R = rewards[t] + gamma * R * (1 - dones[t])          <span class="c"># game over → no future</span>
+    returns.append(R)</pre>
+
+<h3>③ Advantage and the three-part loss</h3>
+<pre>advantage = returns - values
+actor_loss = <span class="h">-(logps * advantage.detach()).mean()</span>     <span class="c"># REINFORCE with A instead of G</span>
+critic_loss = <span class="h">advantage.pow(2).mean()</span>                 <span class="c"># (target − V)², like DQN</span>
+loss = actor_loss + vf_coef * critic_loss - ent_coef * entropy
+opt.zero_grad(); loss.backward()
+nn.utils.clip_grad_norm_(model.parameters(), 0.5)      <span class="c"># safety: no giant steps</span>
+opt.step()</pre>
+
+<table>
+<tr><th style="width:32%">Line</th><th>Meaning</th></tr>
+<tr><td><code>gym.make_vec(…, num_envs=8)</code></td><td>8 CartPoles at once. Each update sees 40 steps from 8 different situations, so less correlated data (the same problem DQN's replay buffer solved).</td></tr>
+<tr><td><code>info["final_obs"]</code> trick</td><td>At the 500-step time limit the pole didn't fall, so its future isn't 0. We add γ·V(last real state) so the critic isn't fooled into thinking the game "ended".</td></tr>
+<tr><td><code>advantage.detach()</code></td><td>In the actor's loss, A is a fixed verdict. Without detach, the actor's loss would also push the critic around.</td></tr>
+<tr><td><code>advantage.pow(2)</code></td><td>The critic's squared error: return − V(s) is exactly "target − prediction".</td></tr>
+<tr><td><code>- ent_coef * entropy</code></td><td>Subtracting entropy from the loss = rewarding uncertainty.</td></tr>
+<tr><td><code>clip_grad_norm_(…, 0.5)</code></td><td>Caps the size of each gradient step, a common safety belt in actor-critic.</td></tr>
+</table>
+
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>Running it: CartPole</h2>
+<p class="sub">Real output of <code>python cartpole_a2c.py</code>: 200,000 steps over 8 game copies, n = 5, about 33 seconds.</p>
+
+<pre>
+step  20,000  avg return (last 20 games)   56.0  entropy 0.538
+step  40,000  avg return (last 20 games)  370.8  entropy 0.567
+step  60,000  avg return (last 20 games)   47.6  entropy 0.444      ← a collapse
+step 100,000  avg return (last 20 games)  336.1  entropy 0.499
+step 140,000  avg return (last 20 games)  342.6  entropy 0.564
+step 200,000  avg return (last 20 games)  415.1  entropy 0.560
+
+First game that reached the 500-step limit: at step 16,248
+Exam, 20 new games:  greedy (most likely action)  avg 500.0, min 500
+                     sampled (roll the dice)      avg 398.1, min 120
+</pre>
+
+<figure><img src="file:///D:/Langchain/rl_topics/05_actor_critic_a2c/cartpole_a2c.png" alt="A2C learning curve, entropy, critic values"><figcaption>Top left: score per game. Top right: the actor's entropy. Bottom left: the critic's V(s) along one game, early vs final. Bottom right: the final critic's verdict as the pole spins faster.</figcaption></figure>
+
+<h3>Inside the critic: what it learned</h3>
+<table>
+<tr><th>Pole upright, spinning at (rad/s)</th><th class="n">early critic V (20k steps)</th><th class="n">final critic V (200k steps)</th></tr>
+<tr><td>0.0</td><td class="n">25.1</td><td class="n"><b>100.0</b></td></tr>
+<tr><td>1.0</td><td class="n">25.0</td><td class="n">97.7</td></tr>
+<tr><td>1.5</td><td class="n">24.9</td><td class="n">84.4</td></tr>
+<tr><td>2.0</td><td class="n">24.8</td><td class="n">65.1</td></tr>
+<tr><td>3.0</td><td class="n">24.2</td><td class="n"><b>46.9</b></td></tr>
+</table>
+<ul>
+<li>The <b>early</b> critic gives every state about 25: it hasn't learned to tell states apart yet.</li>
+<li>The <b>final</b> critic knows a calm pole is worth the maximum, 1/(1 − 0.99) = <b>100</b>, and a fast-spinning one much less: <b>"a fast-falling pole is bad news"</b>. That's exactly the information the actor needs to judge its moves.</li>
+<li>Along a perfect 500-step game, the final critic says V ≈ 100 at every step, even at step 499. That's correct: the time limit is not a real end (chapter 09's <code>final_obs</code> trick).</li>
+</ul>
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>Experiments</h2>
+<p class="sub">Real output of <code>experiments.py</code> (80,000 steps, 2 seeds each), <code>acrobot_a2c.py</code> and <code>compare_reinforce.py</code>.</p>
+
+<h3>A · Entropy bonus</h3>
+<table>
+<tr><th>ent_coef</th><th class="n">exam score, seed 0 / seed 1</th><th class="n">final entropy</th></tr>
+<tr><td>0 (no bonus)</td><td class="n">150.0 / 269.0</td><td class="n">0.46 / 0.48</td></tr>
+<tr><td>0.01 (default)</td><td class="n">251.6 / 385.0</td><td class="n">0.52 / 0.46</td></tr>
+<tr><td>0.1</td><td class="n">220.9 / <b>500.0</b></td><td class="n">0.55 / 0.56</td></tr>
+</table>
+<p>A bigger bonus kept the actor more unsure (higher entropy) and gave the best single result here. With only 80,000 steps and 2 seeds the differences are hints, not proof.</p>
+
+<h3>B · n-step: how far to look before trusting the critic</h3>
+<table>
+<tr><th>n_steps</th><th class="n">updates</th><th class="n">exam score, seed 0 / seed 1</th></tr>
+<tr><td>1 (pure TD)</td><td class="n">10,000</td><td class="n"><b>500.0 / 500.0</b></td></tr>
+<tr><td>5 (default)</td><td class="n">2,000</td><td class="n">251.6 / 385.0</td></tr>
+<tr><td>20</td><td class="n">500</td><td class="n">146.6 / 358.9</td></tr>
+</table>
+<p>With the same 80,000 steps, n = 1 makes <b>5× more updates</b> than n = 5, and on CartPole that won clearly. The lesson isn't "n = 1 is always best". With the same number of steps, a smaller n means more, smaller learning steps, and CartPole's critic becomes accurate quickly, so trusting it early pays off.</p>
+
+<h3>C · Separate networks vs a shared body</h3>
+<table>
+<tr><th>setup</th><th class="n">exam score, seed 0 / seed 1</th></tr>
+<tr><td>separate actor and critic</td><td class="n"><b>251.6 / 385.0</b></td></tr>
+<tr><td>shared body, two heads</td><td class="n">122.2 / 115.2</td></tr>
+</table>
+<p>Sharing layers saves computation, but the critic's large squared errors (values up to 100) can drown out the actor's small signal in the shared weights. Here separate networks won clearly.</p>
+
+<h3>D · A new game with the same code: Acrobot</h3>
+<p>Acrobot: two linked poles hanging down; push the "elbow" left, right or not at all (3 actions); −1 every step until the tip swings above a line. A random player scores about −500.</p>
+<pre>
+First 50 games: avg −227.7      last 50 games: avg −88.9
+Exam, greedy: avg −80.7 (best −69, worst −115)      sampled: avg −83.8
+</pre>
+<figure><img style="max-width:150mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/05_actor_critic_a2c/acrobot_a2c.png" alt="A2C on Acrobot"><figcaption>Score improves from about −230 to −85 (it swings up in ~80 steps). The entropy falls from ln 3 = 1.10 (all 3 actions equal) towards 0.1 as the actor becomes sure of its swinging rhythm.</figcaption></figure>
+
+<h3>E · A2C vs REINFORCE, same budget (120,000 steps, 3 seeds)</h3>
+<table>
+<tr><th></th><th class="n">avg of last 50 training games (seeds 0 / 1 / 2)</th><th class="n">exam, greedy (mean)</th><th class="n">updates</th></tr>
+<tr><td>REINFORCE</td><td class="n">43.2 / 169.6 / 118.0</td><td class="n">167.1</td><td class="n">~950 (one per game)</td></tr>
+<tr><td><b>A2C</b></td><td class="n"><b>436.0 / 407.5 / 232.1</b></td><td class="n"><b>500.0</b> (all 3 seeds)</td><td class="n">3,000</td></tr>
+</table>
+<pre>
+Noise in the learning signal (spread of the weight multiplying ∇log π):
+  REINFORCE  weight = G_t          spread 16.51
+  A2C        weight = advantage    spread  2.25      ← about 7× calmer
+</pre>
+<p>This is the whole booklet in one experiment: replacing the noisy return G with the critic's advantage made the signal about <b>7× less noisy</b> and allowed <b>3× more updates</b> (every 5 steps instead of once per game). A2C reached a perfect exam on every seed; REINFORCE didn't on any. (One honest detail: A2C's score <i>curve</i> moved around more between checkpoints, 38.8 vs 27.2, because it climbs to high scores and its swings up there are larger. "Less noisy signal" doesn't mean "perfectly smooth curve".)</p>
+<figure><img style="max-width:150mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/05_actor_critic_a2c/compare_reinforce.png" alt="A2C vs REINFORCE learning curves"><figcaption>A2C vs REINFORCE with the same number of environment steps.</figcaption></figure>
+
+
+
+<!-- ═══════════ 12 ═══════════ -->
+<h2><span class="n">12</span>Real-world problems</h2>
+<div class="box plain"><span class="tag">When actor-critic fits</span>
+<p>✔ You want a policy (random or continuous actions) but REINFORCE is too noisy. ✔ Long or never-ending tasks (learns every few steps). ✔ You can run many simulator copies in parallel. ✘ When data is expensive and you must reuse it, off-policy methods (DQN, SAC) are more sample-efficient.</p>
+</div>
+
+<h3>1 · Game AI that must react continuously</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>positions and speeds of the player, opponents and ball (a vector), or screen pixels</td></tr>
+<tr><td><b>Action</b></td><td>move / jump / shoot: discrete, chosen with probabilities</td></tr>
+<tr><td><b>Reward</b></td><td>+1 for scoring, −1 for conceding, small shaping rewards</td></tr>
+<tr><td><b>Why A2C</b></td><td>Many game copies run in parallel on one computer, exactly A2C's setting. A3C/A2C were benchmark methods on Atari games in the original papers. The critic gives feedback every few frames instead of only at the end of a level.</td></tr>
+</table>
+
+<h3>2 · Scheduling jobs on a data-centre's machines</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>queue of waiting jobs (sizes, waiting times), free CPU and memory on each machine</td></tr>
+<tr><td><b>Action</b></td><td>which job to start next on which machine (a probability for each choice)</td></tr>
+<tr><td><b>Reward</b></td><td>−(total waiting time) each step</td></tr>
+<tr><td><b>Why actor-critic</b></td><td>A never-ending task: jobs keep arriving, so Monte Carlo/REINFORCE can't wait for "the end". The critic learns how good a queue situation is; the actor learns which choices improve it. Research has explored RL schedulers like this ("could be used for").</td></tr>
+<tr><td><b>Pitfall</b></td><td>Must be trained in a simulator that matches real job patterns.</td></tr>
+</table>
+
+<h3>3 · A robot learning to walk in simulation</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>joint angles, speeds, body tilt, foot contacts</td></tr>
+<tr><td><b>Action</b></td><td>a torque per joint: continuous, from a Gaussian actor (mean and spread per joint)</td></tr>
+<tr><td><b>Reward</b></td><td>+forward speed − energy used − big penalty for falling</td></tr>
+<tr><td><b>Why</b></td><td>Continuous actions need a policy; walking runs for thousands of steps, so the critic's step-by-step advantage is essential. In practice PPO (booklet 06), an improved actor-critic, is the usual choice.</td></tr>
+</table>
+
+<!-- ═══════════ 13 ═══════════ -->
+<h2><span class="n">13</span>Side by side</h2>
+<table class="long">
+<tr><th style="width:20%"></th><th>Q-learning / DQN</th><th>REINFORCE</th><th>A2C</th><th>PPO</th></tr>
+<tr><td>Learns</td><td>Q(s,a)</td><td>π(a|s)</td><td><b>π(a|s) + V(s)</b></td><td>π(a|s) + V(s)</td></tr>
+<tr><td>Feedback signal</td><td>Bellman target</td><td>real return G − b</td><td><b>advantage from the critic</b></td><td>advantage (GAE)</td></tr>
+<tr><td>Learns when</td><td>every step</td><td>after each game</td><td>every n steps</td><td>after a batch, several passes</td></tr>
+<tr><td>Noise</td><td>low</td><td>high</td><td>medium-low</td><td>medium-low</td></tr>
+<tr><td>Bias</td><td>yes (bootstrapping)</td><td>none</td><td>some (critic's guess)</td><td>tunable (λ)</td></tr>
+<tr><td>Random / continuous policies</td><td>no</td><td>yes</td><td>yes</td><td>yes</td></tr>
+<tr><td>Reuses old data</td><td>yes (replay)</td><td>no</td><td>no</td><td>a few times</td></tr>
+<tr><td>Exploration</td><td>ε</td><td>its own dice</td><td>dice + entropy bonus</td><td>dice + entropy bonus</td></tr>
+<tr><td>Where it came from</td><td>value-based</td><td>policy-based</td><td colspan="2">both, combined</td></tr>
+</table>
+
+<!-- ═══════════ 14 ═══════════ -->
+<h2><span class="n">14</span>Clearing up the confusions</h2>
+<div class="qa"><div class="q">Are the actor and critic two separate neural networks?</div><p>In our default, yes (<code>shared=False</code>). They can also share a body with two heads. Experiment C compares both.</p></div>
+<div class="qa"><div class="q">Does the critic choose actions?</div><p>Never. It only outputs one number, V(s). The actor alone chooses, by rolling its dice.</p></div>
+<div class="qa"><div class="q">Is the critic's V the same V as in value iteration?</div><p>Same meaning, "expected total reward from here", but for the <b>actor's current policy</b>, and learned from experience with TD, not computed from a rule book.</p></div>
+<div class="qa"><div class="q">Why V(s) and not Q(s,a) for the critic?</div><p>The advantage needs "what did I expect here?" = V(s), and "what did I get?" = r + γV(s′). One number per state is easier to learn than one per action.</p></div>
+<div class="qa"><div class="q">Is δ the same as Q-learning's surprise?</div><p>Same idea: target − old guess. Q-learning uses it to fix Q[s, a]. Actor-critic uses it twice: to fix V(s) and as the actor's advantage.</p></div>
+<div class="qa"><div class="q">Which state is updated?</div><p>For the critic: V of the states it was in (the states you left). For the actor: the probabilities of the actions taken in those states. s′ is only read, for the target, as in every TD method.</p></div>
+<div class="qa"><div class="q">If the critic is wrong, isn't the actor misled?</div><p>Yes, early on. That's the "bias" of bootstrapping. Both improve together; n-step returns reduce the damage by using more real rewards.</p></div>
+<div class="qa"><div class="q">Why did the score drop around step 60,000 and then recover?</div><p>Policy methods can take a bad step: a large update makes the actor worse, and its new games teach the critic misleading things for a while. PPO's whole purpose is to prevent such big bad steps.</p></div>
+<div class="qa"><div class="q">Why is greedy testing (500.0) much better than rolling dice (398.1)?</div><p>The actor still keeps some uncertainty (entropy ≈ 0.56), so sampled play makes occasional bad pushes. For evaluation we can just take its most likely action.</p></div>
+<div class="qa"><div class="q">Why does the final critic say V ≈ 100 even at step 499?</div><p>Because the 500-step limit is a time-out, not a real end. The pole was still up, so from the critic's point of view the future would have continued. Max value = 1/(1 − 0.99) = 100.</p></div>
+
+
+<!-- ═══════════ 15 ═══════════ -->
+<h2><span class="n">15</span>Practice problems</h2>
+<ol>
+<li><b>TD error.</b> V(s) = 10, r = 1, V(s′) = 12, γ = 0.9. Compute δ. Better or worse than expected?</li>
+<li><b>Critic update.</b> In problem 1, with α = 0.1, what is the new V(s)?</li>
+<li><b>Actor update.</b> π = [0.5, 0.5] (h = [0, 0]), the action taken was 0, δ = +2, α = 0.1. New h and new π(0)?</li>
+<li><b>Terminated.</b> V(s) = 3, r = −1, V(s′) = 50, the game ended. δ?</li>
+<li><b>Truncated.</b> Same as 4, but the game only hit the time limit (γ = 0.99). Target and δ?</li>
+<li><b>Entropy.</b> Compute H for π = [0.7, 0.3]. (ln 0.7 ≈ −0.357, ln 0.3 ≈ −1.204)</li>
+<li><b>n-step.</b> Rewards 1, 1 then V(s<sub>2</sub>) = 10, γ = 0.9, V(s<sub>0</sub>) = 9. Compute the 2-step return from s<sub>0</sub> and the advantage.</li>
+<li><b>Rare vs common.</b> π(a) = 0.1 for the action taken, δ = +1. What is the a-component of ∇log π? Compare with π(a) = 0.9.</li>
+<li><b>Conceptual.</b> Why can actor-critic learn in a task that never ends, while REINFORCE can't?</li>
+<li><b>Conceptual.</b> Your critic always outputs 0. What does A2C turn into?</li>
+<li><b>Coding.</b> In <code>experiments.py</code>, add <code>ent_coef = 0.5</code>. Predict the final entropy and score, then run it.</li>
+<li><b>Coding.</b> Run <code>cartpole_a2c.py</code> with <code>n_envs=1</code> (same total steps). Is learning smoother or bumpier?</li>
+</ol>
+
+<!-- ═══════════ 16 ═══════════ -->
+<h2><span class="n">16</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\05_actor_critic_a2c
+python hand_example.py           <span class="c"># four updates by hand + entropy + n-step, checked by autograd   (5 s)</span>
+python cartpole_a2c.py           <span class="c"># A2C on CartPole, inside the actor and critic                 (~1 min)</span>
+python acrobot_a2c.py            <span class="c"># the same code on Acrobot (3 actions, −1 per step)            (~2 min)</span>
+python compare_reinforce.py      <span class="c"># A2C vs REINFORCE with the same budget                        (~4 min)</span>
+python experiments.py nsteps     <span class="c"># also: entropy, shared                                         (2-4 min each)</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">A2C in 9 lines</span>
+<pre style="background:#fff;margin:6px 0">actor π, critic V; 8 game copies
+repeat:
+  play 5 steps in each copy (a ~ π)
+  R = V(last state)
+  for t backwards: R = r + γR(1−end)
+  A = R − V(s)
+  loss = −logπ·A + 0.5·A² − 0.01·H
+  one gradient step (both nets)</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">Key formulas</span>
+<pre style="background:#fff;margin:6px 0">A(s,a) = Q(s,a) − V(s)
+δ = r + γV(s′) − V(s)
+critic: V += α δ    (loss A²)
+actor:  θ += α A ∇log π(a|s)
+∇_h log π(a) = one_hot(a) − π
+H = −Σ π ln π</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>Actor-critic = a policy network (the player) + a value network (the coach).</li>
+<li>The critic learns V(s) with a TD/Bellman target; its surprise δ is the actor's advantage.</li>
+<li>The actor is REINFORCE with the advantage in place of the full return: less noise, and it learns every few steps.</li>
+<li>A2C runs several game copies together, adds an entropy bonus to keep exploring, and uses n-step returns to balance noise and bias.</li>
+</ol>
+</div>
+
+<!-- ═══════════ 17 ═══════════ -->
+<h2><span class="n">17</span>Answers</h2>
+<ol>
+<li>δ = 1 + 0.9 × 12 − 10 = 1 + 10.8 − 10 = <b>+1.8</b>. Better than expected.</li>
+<li>V(s) = 10 + 0.1 × 1.8 = <b>10.18</b>.</li>
+<li>∇log π(0) = [0.5, −0.5]; h = 0.1 × 2 × [0.5, −0.5] = <b>[0.1, −0.1]</b>; π(0) = 1/(1 + e<sup>−0.2</sup>) ≈ <b>0.550</b>.</li>
+<li>Ended: target = r = −1; δ = −1 − 3 = <b>−4</b> (V(s′) ignored).</li>
+<li>Time-out: target = −1 + 0.99 × 50 = <b>48.5</b>; δ = 48.5 − 3 = <b>+45.5</b>. Treating a time-out as a real end would give the wrong sign!</li>
+<li>H = −(0.7 × (−0.357) + 0.3 × (−1.204)) = 0.250 + 0.361 = <b>0.611</b>.</li>
+<li>Return = 1 + 0.9 × 1 + 0.81 × 10 = 1 + 0.9 + 8.1 = <b>10.0</b>. Advantage = 10.0 − 9 = <b>+1.0</b>.</li>
+<li>Component = 1 − π(a). For 0.1: <b>0.9</b>; for 0.9: <b>0.1</b>. The rare action's probability moves 9× more.</li>
+<li>The critic's V(s′) stands in for "everything after", so it can update after a few steps. REINFORCE needs the real total until the end, which never comes.</li>
+<li>A = the n-step discounted sum of rewards: REINFORCE with truncated returns and no baseline. Noisier and biased (it ignores everything after n steps).</li>
+<li>A reasonable prediction: entropy stays close to 0.69 (the actor is paid to stay 50/50), so sampled play stays poor. Run it to check.</li>
+<li>Prediction: bumpier. Each update sees 5 consecutive, very similar steps from one game. Check the learning curve.</li>
+</ol>
+
+</main>
+</body>
+</html>

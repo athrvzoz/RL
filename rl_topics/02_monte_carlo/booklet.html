@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monte Carlo Methods</title>
+<style>
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --ink:#151B2F; --muted:#5B647A; --line:#D6DCE7;
+  --accent:#2C4BD1; --accent-soft:#E8ECFB; --gold:#A86A08; --gold-soft:#FBF3E2;
+  --good:#1E8A5A; --good-soft:#E3F3EA; --bad:#C2413A; --bad-soft:#FBE7E5; --code:#F1F3F8;
+  --f-body:"Segoe UI", system-ui, sans-serif;
+  --f-mono:Consolas, "Cascadia Mono", monospace;
+}
+@page{size:A4;margin:15mm 15mm 16mm}
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:10.6pt;line-height:1.55;margin:0}
+main{max-width:180mm;margin:0 auto}
+h1{font-size:30pt;line-height:1.05;margin:0 0 8px;font-weight:800;letter-spacing:-.01em}
+h2{font-size:19pt;line-height:1.15;margin:0 0 4px;font-weight:800;break-before:page;padding-top:2px}
+h2 .n{font-family:var(--f-mono);font-size:11pt;color:var(--accent);vertical-align:4pt;margin-right:8px}
+h3{font-size:13pt;margin:18px 0 6px;font-weight:700;break-after:avoid}
+h4{font-size:11pt;margin:12px 0 4px;break-after:avoid}
+.sub{color:var(--muted);margin:0 0 12px;font-size:11pt}
+p{margin:0 0 9px}
+ul,ol{margin:0 0 9px;padding-left:1.3em}
+li{margin-bottom:3px}
+code{font-family:var(--f-mono);font-size:.9em;background:var(--code);padding:0 4px;border-radius:3px}
+pre{font-family:var(--f-mono);font-size:8.6pt;line-height:1.45;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin:0 0 10px;white-space:pre-wrap;break-inside:avoid}
+pre .c{color:#5B647A}
+pre .k{color:var(--accent);font-weight:700}
+pre .h{background:#FFF0C2}
+.box{padding:10px 13px;margin:10px 0;border-radius:5px;break-inside:avoid}
+.box > :last-child{margin-bottom:0}
+.tag{display:block;font-family:var(--f-mono);font-size:8pt;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;font-weight:700}
+.plain{background:var(--accent-soft)} .plain .tag{color:var(--accent)}
+.key{border:2px solid var(--ink)} .key .tag{color:var(--ink)}
+.warn{background:var(--gold-soft);border:1px solid #E6CC97} .warn .tag{color:var(--gold)}
+.ok{background:var(--good-soft)} .ok .tag{color:var(--good)}
+table{border-collapse:collapse;width:100%;font-size:9.6pt;margin:6px 0 12px;break-inside:avoid}
+table.long{break-inside:auto} table.long tr{break-inside:avoid}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:8pt;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#F5F6FA}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+figure{margin:10px 0 14px;break-inside:avoid}
+figure svg{display:block;width:100%;height:auto}
+figure img{display:block;width:100%;border:1px solid var(--line);border-radius:4px}
+figcaption{font-size:9pt;color:var(--muted);margin-top:5px}
+svg text{font-family:var(--f-body);font-size:13px;fill:currentColor}
+svg .t-m{fill:#5B647A} svg .t-a{fill:#2C4BD1;font-weight:700} svg .t-g{fill:#1E8A5A;font-weight:700} svg .t-b{fill:#C2413A;font-weight:700}
+svg .t-h{font-weight:700;font-size:12px;letter-spacing:.06em}
+svg .bx{fill:#fff;stroke:#151B2F;stroke-width:1.4}
+svg .bxa{fill:#E8ECFB;stroke:#2C4BD1;stroke-width:1.6}
+svg .bxg{fill:#E3F3EA;stroke:#1E8A5A;stroke-width:1.6}
+svg .ln{fill:none;stroke:#151B2F;stroke-width:1.5}
+svg .lna{fill:none;stroke:#2C4BD1;stroke-width:2.2}
+svg .lnd{fill:none;stroke:#9AA3B9;stroke-width:1.4;stroke-dasharray:5 4}
+
+/* gridworld boards */
+.boards{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px;break-inside:avoid}
+.board{break-inside:avoid}
+.board .cap{font-family:var(--f-mono);font-size:8pt;color:var(--muted);margin-bottom:3px}
+table.gw{width:auto;border-collapse:separate;border-spacing:2px;margin:0;font-family:var(--f-mono);font-size:8pt}
+table.gw td{width:40px;height:30px;padding:0;text-align:center;vertical-align:middle;border:1px solid var(--line);border-radius:3px;line-height:1.1}
+table.gw.big td{width:62px;height:46px;font-size:9.5pt}
+table.gw.big td b{display:block;font-size:13pt;font-family:var(--f-body)}
+td.wall{background:repeating-linear-gradient(45deg,#D6DCE7 0 3px,#fff 3px 7px)}
+td.G{background:#2E9E68;color:#fff;font-weight:700} td.P{background:#D2564F;color:#fff;font-weight:700}
+td.H{background:#1F3B57;color:#fff;font-weight:700}
+td.g3{background:#8ED1AE} td.g2{background:#B9E3CB} td.g1{background:#E3F3EA} td.ng{background:#FBE7E5}
+td.new{outline:2px solid var(--accent);outline-offset:-2px}
+td.ice{background:#DDEEFF}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cover{height:240mm;display:flex;flex-direction:column;justify-content:center}
+.eyebrow{font-family:var(--f-mono);font-size:9pt;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:13pt;color:var(--muted);max-width:150mm}
+.toc{margin-top:26px;columns:2;column-gap:24px;font-size:10.5pt}
+.toc div{break-inside:avoid;padding:3px 0;border-bottom:1px solid var(--line)}
+.toc span{font-family:var(--f-mono);color:var(--accent);margin-right:8px}
+.qa{border-left:3px solid var(--accent);padding:4px 0 4px 12px;margin:0 0 12px;break-inside:avoid}
+.qa .q{font-weight:700;margin-bottom:3px}
+.qa .q::before{content:"Q. ";color:var(--accent)}
+.wrong{color:var(--bad);font-weight:700} .right{color:var(--good);font-weight:700}
+/* policy charts (stick / hit) */
+table.pc{width:auto;border-collapse:separate;border-spacing:1px;margin:0;font-family:var(--f-mono);font-size:7.6pt}
+table.pc td,table.pc th{width:25px;height:17px;padding:0;text-align:center;vertical-align:middle;border:none;letter-spacing:0;text-transform:none;font-size:7.6pt}
+table.pc th{background:none;color:var(--muted)}
+td.S{background:#2a78d6;color:#fff;font-weight:700} td.Hh{background:#F6C445;color:#151B2F;font-weight:700}
+</style>
+</head>
+<body>
+<main>
+
+<!-- ═══════════════════ COVER ═══════════════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Topic 2</div>
+  <h1>Monte Carlo<br>Methods</h1>
+  <p class="lede">Play the whole game first. When it ends, walk backwards and give every situation you passed through the real result. Learned on Blackjack, with every number taken from the code in <code>rl_topics/02_monte_carlo</code>.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture</div>
+    <div><span>02</span>Words you need</div>
+    <div><span>03</span>Intuition: learn from the final score</div>
+    <div><span>04</span>The maths, step by step</div>
+    <div><span>05</span>The algorithm</div>
+    <div><span>06</span>Blackjack: the game</div>
+    <div><span>07</span>The code, line by line</div>
+    <div><span>08</span>Running it: prediction</div>
+    <div><span>09</span>Running it: control</div>
+    <div><span>10</span>Experiments: turning the knobs</div>
+    <div><span>11</span>Monte Carlo vs TD (Q-learning's way)</div>
+    <div><span>12</span>Off-policy: learning from others' games</div>
+    <div><span>13</span>Real-world problems</div>
+    <div><span>14</span>Side by side</div>
+    <div><span>15</span>Clearing up the confusions</div>
+    <div><span>16</span>Practice problems</div>
+    <div><span>17</span>Run it yourself + cheat sheet</div>
+    <div><span>18</span>Answers to the practice problems</div>
+  </div>
+</section>
+
+<!-- ═══════════════════ 01 BIG PICTURE ═══════════════════ -->
+<h2><span class="n">01</span>The big picture</h2>
+<p class="sub">You asked once: "Does Q-learning wait until the end of the game and then update everything backwards?" It doesn't. <b>Monte Carlo does.</b></p>
+
+<p>You have built three things so far. Each one answers "how good is this?" in a different way:</p>
+<ul>
+<li><b>Bandit</b> (one state, no future): Q[a] = the <b>average</b> of the rewards you got from arm a. Update: <code>Q += (r − Q)/N</code>.</li>
+<li><b>Value iteration</b>: has the rule book, so it <b>calculates</b> every square with Bellman. Never plays.</li>
+<li><b>Q-learning</b>: no rule book. After <b>every step</b> it nudges Q[s,a] toward <code>r + γ·max Q[s2]</code>, a target that contains a <b>guess</b> (Q[s2]).</li>
+</ul>
+<p><b>Monte Carlo (MC)</b> is the bandit idea stretched over a whole game. No rule book, no guesses. It plays one full game, waits for the end, then for every state it visited it writes down the <b>real total reward that came after</b>, and averages those totals. That's all.</p>
+
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="The RL family: model-based value iteration versus model-free learning, which splits into Q-learning (update every step from a guess) and Monte Carlo (wait for the end, use the real total)">
+  <defs><marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="270" y="10" width="220" height="44" rx="5" class="bx"/>
+  <text x="380" y="30" text-anchor="middle" font-weight="700">"How good is this state?"</text>
+  <text x="380" y="46" text-anchor="middle" class="t-m">every RL method answers this</text>
+  <path d="M330,54 L170,96" class="ln" marker-end="url(#ar1)"/>
+  <path d="M430,54 L560,96" class="ln" marker-end="url(#ar1)"/>
+  <text x="225" y="70" text-anchor="middle" class="t-m">rule book given</text>
+  <text x="540" y="70" text-anchor="middle" class="t-m">no rule book</text>
+  <rect x="40" y="98" width="250" height="58" rx="5" class="bxa"/>
+  <text x="165" y="120" text-anchor="middle" font-weight="700">VALUE ITERATION (project 2)</text>
+  <text x="165" y="141" text-anchor="middle" class="t-m">calculate, never play</text>
+  <rect x="440" y="98" width="250" height="58" rx="5" class="bx"/>
+  <text x="565" y="120" text-anchor="middle" font-weight="700">MODEL-FREE: play games</text>
+  <text x="565" y="141" text-anchor="middle" class="t-m">learn from env.step() only</text>
+  <path d="M510,156 L420,196" class="ln" marker-end="url(#ar1)"/>
+  <path d="M620,156 L660,196" class="ln" marker-end="url(#ar1)"/>
+  <text x="440" y="178" text-anchor="middle" class="t-m">each step</text>
+  <text x="690" y="178" text-anchor="middle" class="t-m">end of game</text>
+  <rect x="290" y="198" width="230" height="48" rx="5" class="bxa"/>
+  <text x="405" y="218" text-anchor="middle" font-weight="700">Q-LEARNING / TD (proj. 3)</text>
+  <text x="405" y="236" text-anchor="middle" class="t-m">target = r + γ·max Q[s2] (a guess)</text>
+  <rect x="540" y="198" width="215" height="48" rx="5" class="bxg"/>
+  <text x="647" y="218" text-anchor="middle" font-weight="700">MONTE CARLO (this topic)</text>
+  <text x="647" y="236" text-anchor="middle" class="t-m">target = G (the real total)</text>
+</svg>
+<figcaption>Monte Carlo and Q-learning are both model-free. They differ in <b>when</b> they update and <b>what target</b> they move towards.</figcaption>
+</figure>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p><b>Monte Carlo</b> plays a complete game, then walks <b>backwards</b> through it, giving every (state, action) it visited the <b>real total reward that followed</b>, and keeps a running <b>average</b> of those totals, exactly like the bandit, but one average per state.</p>
+</div>
+
+<h3>What problem does it solve that you couldn't before?</h3>
+<table>
+<tr><th style="width:28%">Problem</th><th>Why your old tools struggle</th><th style="width:30%">Monte Carlo</th></tr>
+<tr><td>No rule book</td><td>Value iteration needs P(s′|s,a). In Blackjack nobody gives you card probabilities.</td><td>Only needs to <b>play</b></td></tr>
+<tr><td>The reward only comes at the end</td><td>Q-learning has to pass the news back one step per game, through guesses that start at 0.</td><td>Every visited state gets the real result <b>immediately</b>, after one game</td></tr>
+<tr><td>Bad guesses</td><td>Q-learning's target uses Q[s2]; if that guess is wrong, the target is wrong (biased).</td><td>No guesses in the target at all</td></tr>
+<tr><td>The price</td><td colspan="2">MC <b>must wait for the game to end</b>, and its targets are <b>noisy</b> (one lucky card changes the whole total). Chapter 11 measures both.</td></tr>
+</table>
+
+<!-- ═══════════════════ 02 GLOSSARY ═══════════════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<p class="sub">New words are in <b>bold blue</b> rows' first column; the rest you already know from Q-learning.</p>
+
+<table class="long">
+<tr><th style="width:23%">Term</th><th>Meaning in plain words</th><th style="width:27%">In your code</th></tr>
+<tr><td><b>Episode</b> / game</td><td>One play from the start until the game <i>ends</i>. MC needs episodes that end.</td><td><code>play_episode()</code></td></tr>
+<tr><td><b>Episode record</b></td><td>The list of everything that happened: (state, action, reward) for each step. Recorded while playing, used after.</td><td><code>episode = [(s, a, r), …]</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Return</b> G</td><td>The total (discounted) reward from a step until the end: G = r<sub>1</sub> + γr<sub>2</sub> + γ<sup>2</sup>r<sub>3</sub> + … A <b>number</b>, known only when the game is over.</td><td><code>G</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Walking backwards</b></td><td>Computing G for every step from the last step to the first, using G = r + γ·G<sub>after</sub>.</td><td><code>for t in reversed(...)</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Monte Carlo</b></td><td>Any method that estimates something by averaging many random samples. Named after the casino in Monaco.</td><td><code>mc.py</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Prediction</b> (policy evaluation)</td><td>"How good is each state <i>if I play this fixed policy</i>?" Output: V(s). The policy does not change.</td><td><code>mc_prediction()</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Control</b></td><td>"Find a <i>better</i> policy." Output: Q(s,a) and the greedy policy.</td><td><code>mc_control()</code></td></tr>
+<tr><td><b>Value</b> V(s)</td><td>Average return from s, following the policy. One number per state.</td><td><code>V[s]</code> (a dict)</td></tr>
+<tr><td><b>Q-value</b> Q(s,a)</td><td>Average return after doing a in s, then following the policy.</td><td><code>Q[s][a]</code></td></tr>
+<tr><td><b>Visit count</b> N</td><td>How many returns have been averaged into this state so far.</td><td><code>N[s]</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Incremental mean</b></td><td>Update an average without storing the list: V += (G − V)/N. Same as the bandit.</td><td><code>V[s] += (G - V[s]) / N[s]</code></td></tr>
+<tr><td style="color:var(--accent)"><b>First-visit</b> / <b>every-visit</b></td><td>If a state appears twice in one game: count only its first appearance, or count both.</td><td><code>first_visit=True</code></td></tr>
+<tr><td><b>Bootstrapping</b></td><td>Using a stored guess (Q[s2]) inside a target. Q-learning does it; <b>MC never does</b>.</td><td>absent in <code>mc.py</code></td></tr>
+<tr><td style="color:var(--accent)"><b>TD(0)</b></td><td>"Temporal difference": update V(s) after each step toward r + γV(s2). Q-learning is the Q-version of this idea.</td><td><code>mc_vs_td.py</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Bias</b></td><td>A target that is wrong <i>on average</i> (TD with bad guesses).</td><td>ch. 11</td></tr>
+<tr><td style="color:var(--accent)"><b>Variance</b></td><td>A target that is right on average but jumps around a lot from game to game (MC).</td><td>ch. 11</td></tr>
+<tr><td><b>ε-greedy</b></td><td>Random action with chance ε, otherwise the best Q. Keeps every action being tried.</td><td><code>epsilon_greedy_policy()</code></td></tr>
+<tr><td style="color:var(--accent)"><b>On-policy</b></td><td>Learn about the same policy you use to play (ε-greedy plays, ε-greedy is learned).</td><td><code>mc_control()</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Exploring starts</b></td><td>Start each game with a random state <i>and</i> random first action, then play greedily.</td><td><code>exploring_starts=True</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Off-policy</b></td><td>Learn about one policy (target π) from games played by another (behaviour b).</td><td><code>off_policy.py</code></td></tr>
+<tr><td style="color:var(--accent)"><b>Importance sampling ratio</b> ρ</td><td>How much a game counts: product of π(a|s)/b(a|s) over the game.</td><td><code>ratio()</code></td></tr>
+<tr><td><b>Policy</b> π(a|s)</td><td>The agent's rule for choosing actions (can be random: "hit with 50%"). <b>Action</b> probabilities belong to the agent.</td><td><code>stick_on_20</code>, <code>greedy(Q)</code></td></tr>
+<tr><td><b>Environment probabilities</b></td><td>Which card comes next. They belong to the <b>world</b>; MC never sees or stores them.</td><td>hidden inside <code>env.step()</code></td></tr>
+<tr><td><b>Usable ace</b></td><td>An ace you are counting as 11 without busting (it can still drop to 1 later).</td><td><code>s[2] == 1</code></td></tr>
+</table>
+
+<!-- ═══════════════════ 03 INTUITION ═══════════════════ -->
+<h2><span class="n">03</span>Intuition: learn from the final score</h2>
+<p class="sub">Some results only exist at the end. You can't know who won a cricket match after the 10th over.</p>
+
+<h3>The cricket coach</h3>
+<p>A coach wants to learn: "When we are at <b>60 for 2 after 10 overs</b>, how likely are we to win?" She can't calculate this from a rule book: nobody knows the exact probability of every ball. So she does the obvious thing:</p>
+<ol>
+<li>She <b>watches whole matches</b>. During the match she just writes down the situations: "10 overs: 60/2", "20 overs: 110/4", …</li>
+<li>When the match <b>ends</b> she knows the result: won (+1) or lost (−1).</li>
+<li>She goes back through her notebook and writes that result next to <b>every situation from that match</b>.</li>
+<li>Over many matches, "60/2 after 10 overs" collects a list of results: +1, −1, +1, +1 … Its <b>average</b> is her answer.</li>
+</ol>
+<p>That is Monte Carlo prediction, exactly. The notebook is the episode record, the result is the return G, and the average is V(s).</p>
+
+<div class="box plain"><span class="tag">Compare: how would a Q-learning coach do it?</span>
+<p>She would update after <b>every over</b>: "We were 60/2 and now we're 110/4. My table says 110/4 wins 55% of the time, so 60/2 must be worth about that." She never waits for the result, she trusts her table for the next situation. Fast, but only as good as her table. The MC coach never trusts her table; she only trusts finished matches.</p>
+</div>
+
+<h3>A tiny example you can do by hand</h3>
+<p>One state we care about: <b>"my sum is 20, dealer shows 10"</b>. We play "stick on 20" (so we always stick here). Five games happened to pass through this state. Their final results:</p>
+<table>
+<tr><th>Game</th><th class="n">Result G</th><th class="n">N</th><th>V before</th><th>V += (G − V)/N</th><th class="n">V after</th></tr>
+<tr><td>1</td><td class="n">+1 (win)</td><td class="n">1</td><td>0</td><td>0 + (1 − 0)/1</td><td class="n">1.000</td></tr>
+<tr><td>2</td><td class="n">+1</td><td class="n">2</td><td>1</td><td>1 + (1 − 1)/2</td><td class="n">1.000</td></tr>
+<tr><td>3</td><td class="n">−1 (loss)</td><td class="n">3</td><td>1</td><td>1 + (−1 − 1)/3</td><td class="n">0.333</td></tr>
+<tr><td>4</td><td class="n">0 (draw)</td><td class="n">4</td><td>0.333</td><td>0.333 + (0 − 0.333)/4</td><td class="n">0.250</td></tr>
+<tr><td>5</td><td class="n">+1</td><td class="n">5</td><td>0.250</td><td>0.250 + (1 − 0.250)/5</td><td class="n">0.400</td></tr>
+</table>
+<p>Check with a plain average: (1 + 1 − 1 + 0 + 1)/5 = 2/5 = <b>0.400</b>. Same number. The real run with <b>29,880</b> visits to this state gave <b>V = +0.437</b> (chapter 08).</p>
+
+<div class="box warn"><span class="tag">Notice what is NOT here</span>
+<p>No probability of cards. No γ·V(next state). No guess of any other state. Just finished games and an average. This is why MC is the easiest RL method to trust: if you average enough real results, you get the right answer.</p>
+</div>
+
+<!-- ═══════════════════ 04 MATHS ═══════════════════ -->
+<h2><span class="n">04</span>The maths, step by step</h2>
+<p class="sub">Only three ideas: a sum (the return), an average (the value), and a shortcut for the average (the incremental mean).</p>
+
+<h3>① The return G: "everything that came after"</h3>
+<p>Number the rewards after time t as r<sub>1</sub>, r<sub>2</sub>, r<sub>3</sub>, … until the end. The return from time t is</p>
+<pre style="font-size:9.6pt">
+G  =  r₁  +  γ·r₂  +  γ²·r₃  +  …  +  γ^(T−1)·r_T
+▲     ▲      ▲                         ▲
+a     reward discounted                last reward, then the game ENDS
+NUMBER the    once (one step later)     (no more terms: that's why MC needs an end)
+      next step
+</pre>
+<p>This is the <b>same</b> quantity Bellman talks about. In project 2 you saw: V(s′) = r′ + γr″ + …, "V already contains the whole future". The difference is: Bellman <i>predicts</i> it, MC <i>measures</i> it by playing to the end.</p>
+
+<h3>② Computing G backwards: one multiply and one add per step</h3>
+<p>Take the formula for time t and pull out the first reward:</p>
+<pre>
+G_t  = r_(t+1) + γ·r_(t+2) + γ²·r_(t+3) + …
+     = r_(t+1) + γ·( r_(t+2) + γ·r_(t+3) + … )      ← take γ out of everything after the first term
+     = r_(t+1) + γ·G_(t+1)                           ← the bracket IS the return from the next step
+</pre>
+<p>So start at the last step (G = last reward) and walk backwards: <b>G ← r + γ·G</b>. This looks just like the Bellman target r + γ·V(s′), but with the <b>real</b> G of the next step instead of a <b>guess</b> V(s′). (School maths used: factorising, and a finite geometric-style sum.)</p>
+
+<h4>Worked example 1: one game, γ = 0.9</h4>
+<pre>
+Game:   A ──(r = 0)──► B ──(r = −1)──► C ──(r = +10)──► END
+
+Forwards (the definition), from A:   G_A = 0 + 0.9·(−1) + 0.9²·(10) = 0 − 0.9 + 8.1 = 7.2
+
+Backwards (what the code does):
+  start at the end         G = 0
+  C:  G = 10 + 0.9 × 0      = 10.0     → return from C is 10.0
+  B:  G = −1 + 0.9 × 10.0   =  8.0     → return from B is  8.0
+  A:  G =  0 + 0.9 × 8.0    =  7.2     → return from A is  7.2   ✓ same as forwards
+</pre>
+<p>Backwards is cheaper: one pass gives the return of <b>every</b> step. Forwards you would redo the sum for each step.</p>
+
+<h3>③ The value is an average of returns</h3>
+<p>The true value of a state is the <b>expected</b> return (the average over infinitely many games):</p>
+<pre>
+V_π(s) = E_π[ G | start at s ]          "average of G over all games that pass through s,
+                                          playing policy π"
+estimate after N games:   V(s) ≈ ( G⁽¹⁾ + G⁽²⁾ + … + G⁽ᴺ⁾ ) / N
+</pre>
+<p>Why does this work? The <b>law of large numbers</b> from probability: the average of many independent samples gets closer and closer to the expectation. The uncertainty shrinks like 1/√N, so <b>4× more games ⇒ half the error</b>.</p>
+
+<h3>④ The incremental mean: your bandit rule</h3>
+<p>We don't want to store every G. Let V<sub>N</sub> be the average of N returns. Derivation:</p>
+<pre>
+V_N = (G⁽¹⁾ + … + G⁽ᴺ⁻¹⁾ + G⁽ᴺ⁾) / N
+    = ( (N−1)·V_(N−1) + G⁽ᴺ⁾ ) / N           ← the first N−1 returns add up to (N−1)·V_(N−1)
+    = V_(N−1) − V_(N−1)/N + G⁽ᴺ⁾/N            ← split the fraction
+    = V_(N−1) + ( G⁽ᴺ⁾ − V_(N−1) ) / N        ← group: old + (new − old)/N
+      ▲          ▲        ▲          ▲
+      old guess  NEW real old guess  step size 1/N (shrinks: later games move it less)
+                 return
+</pre>
+<p>In the bandit you wrote <code>Q[a] += (r − Q[a]) / N[a]</code>. Monte Carlo is <code>V[s] += (G − V[s]) / N[s]</code>: the reward r became the return G, and the single arm became a state. That's the whole link.</p>
+
+<div class="box plain"><span class="tag">Constant step size α</span>
+<p>Replace 1/N by a fixed α (say 0.05): V += α(G − V). Now recent games count more than old ones. Useful when the policy keeps changing (control), and it makes MC look exactly like Q-learning's update with a different target:<br>
+MC: V(s) ← V(s) + α[<b>G</b> − V(s)] &nbsp;&nbsp;·&nbsp;&nbsp; TD: V(s) ← V(s) + α[<b>r + γV(s′)</b> − V(s)]</p>
+</div>
+
+<h4>Worked example 2: the same game, MC update with α = 0.5</h4>
+<p>Old guesses before the game: V(A) = 2, V(B) = 4, V(C) = 6. Returns from example 1: 7.2, 8.0, 10.0.</p>
+<pre>
+C:  V(C) = 6.0 + 0.5 × (10.0 − 6.0) = 8.0
+B:  V(B) = 4.0 + 0.5 × ( 8.0 − 4.0) = 6.0
+A:  V(A) = 2.0 + 0.5 × ( 7.2 − 2.0) = 4.6       ← A learned from C's +10 in ONE game
+</pre>
+<p>(Printed by <code>python mc_vs_td.py</code>, part 1. Chapter 11 does the same game with TD.)</p>
+
+<h3>⑤ First-visit vs every-visit</h3>
+<p>If a state appears twice in one game, which return do we use?</p>
+<h4>Worked example 3 (γ = 1)</h4>
+<pre>
+Game:  A ──(r = 1)──► B ──(r = 0)──► A ──(r = 2)──► END
+
+backwards:   step 2 (A):  G = 2          step 1 (B):  G = 0 + 2 = 2     step 0 (A):  G = 1 + 2 = 3
+
+first-visit MC:  V(A) gets ONE sample:  3                 (only A's first appearance)
+every-visit MC:  V(A) gets TWO samples: 3 and 2 → mean 2.5
+</pre>
+<p>Both are correct in the long run. First-visit gives independent samples (one per game), which makes the maths of "average → expectation" clean. In Blackjack the question never arises: your sum only goes up (and a usable ace only turns into a non-usable one), so <b>no state can repeat within a game</b>. Our run checked 100,000 games: <b>0</b> repeats, and first-visit and every-visit gave identical V.</p>
+
+<h3>⑥ From V to Q, and from grading to improving</h3>
+<p>Without a rule book, V alone can't choose a move (you'd need to know which action leads where; same reason Q-learning uses Q). So for <b>control</b>, MC averages returns per (state, action):</p>
+<pre>
+Q(s, a) ≈ average of the returns that followed "doing a in s"
+policy:  in each state pick argmax_a Q(s, a)      (with chance ε, pick randomly instead)
+</pre>
+<p>Playing with the greedy policy makes the averages better, better averages make the policy better: <b>generalised policy iteration</b>, the same "evaluate ↔ improve" loop that value iteration did in one formula.</p>
+
+<!-- ═══════════════════ 05 ALGORITHM ═══════════════════ -->
+<h2><span class="n">05</span>The algorithm</h2>
+<p class="sub">Play → wait for the end → walk backwards → update every visited pair → repeat.</p>
+
+<h3>"Wait until the end, then update backwards": the picture</h3>
+<figure>
+<svg viewBox="0 0 760 300" role="img" aria-label="Timeline of one game. Q-learning updates one state after every step using the next state's guess. Monte Carlo records during the game and, after it ends, walks backwards updating every visited state with the real return.">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker>
+  <marker id="ar2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1E8A5A"/></marker>
+  <marker id="ar2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2C4BD1"/></marker></defs>
+  <text x="20" y="22" class="t-h t-a">Q-LEARNING: UPDATE DURING THE GAME, ONE STEP AT A TIME</text>
+  <circle cx="80" cy="70" r="24" class="bx"/><text x="80" y="75" text-anchor="middle" font-weight="700">s₀</text>
+  <circle cx="270" cy="70" r="24" class="bx"/><text x="270" y="75" text-anchor="middle" font-weight="700">s₁</text>
+  <circle cx="460" cy="70" r="24" class="bx"/><text x="460" y="75" text-anchor="middle" font-weight="700">s₂</text>
+  <rect x="620" y="48" width="110" height="44" rx="5" class="bxg"/><text x="675" y="75" text-anchor="middle" font-weight="700">END</text>
+  <line x1="104" y1="70" x2="244" y2="70" class="ln" marker-end="url(#ar2)"/><text x="174" y="62" text-anchor="middle" class="t-m">r₁</text>
+  <line x1="294" y1="70" x2="434" y2="70" class="ln" marker-end="url(#ar2)"/><text x="364" y="62" text-anchor="middle" class="t-m">r₂</text>
+  <line x1="484" y1="70" x2="618" y2="70" class="ln" marker-end="url(#ar2)"/><text x="551" y="62" text-anchor="middle" class="t-m">r₃</text>
+  <text x="80" y="118" text-anchor="middle" class="t-a">update s₀</text><text x="80" y="134" text-anchor="middle" class="t-m">right after step 1</text>
+  <text x="270" y="118" text-anchor="middle" class="t-a">update s₁</text><text x="270" y="134" text-anchor="middle" class="t-m">right after step 2</text>
+  <text x="460" y="118" text-anchor="middle" class="t-a">update s₂</text><text x="460" y="134" text-anchor="middle" class="t-m">right after step 3</text>
+  <text x="675" y="118" text-anchor="middle" class="t-m">target uses a GUESS</text><text x="675" y="134" text-anchor="middle" class="t-m">r + γ·max Q[next]</text>
+
+  <line x1="10" y1="152" x2="750" y2="152" class="lnd"/>
+
+  <text x="20" y="178" class="t-h t-g">MONTE CARLO: RECORD DURING THE GAME, UPDATE ALL AFTER IT ENDS</text>
+  <circle cx="80" cy="218" r="24" class="bx"/><text x="80" y="223" text-anchor="middle" font-weight="700">s₀</text>
+  <circle cx="270" cy="218" r="24" class="bx"/><text x="270" y="223" text-anchor="middle" font-weight="700">s₁</text>
+  <circle cx="460" cy="218" r="24" class="bx"/><text x="460" y="223" text-anchor="middle" font-weight="700">s₂</text>
+  <rect x="620" y="196" width="110" height="44" rx="5" class="bxg"/><text x="675" y="216" text-anchor="middle" font-weight="700">END</text><text x="675" y="233" text-anchor="middle" class="t-m">now G is known</text>
+  <line x1="104" y1="218" x2="244" y2="218" class="ln" marker-end="url(#ar2)"/><text x="174" y="210" text-anchor="middle" class="t-m">r₁ (write down)</text>
+  <line x1="294" y1="218" x2="434" y2="218" class="ln" marker-end="url(#ar2)"/><text x="364" y="210" text-anchor="middle" class="t-m">r₂ (write down)</text>
+  <line x1="484" y1="218" x2="618" y2="218" class="ln" marker-end="url(#ar2)"/><text x="551" y="210" text-anchor="middle" class="t-m">r₃</text>
+  <path d="M675,240 V280 H90 V244" fill="none" stroke="#1E8A5A" stroke-width="2.2" marker-end="url(#ar2b)"/>
+  <circle cx="460" cy="280" r="4" fill="#1E8A5A"/><circle cx="270" cy="280" r="4" fill="#1E8A5A"/>
+  <line x1="460" y1="280" x2="460" y2="245" stroke="#1E8A5A" stroke-width="2.2" marker-end="url(#ar2b)"/>
+  <line x1="270" y1="280" x2="270" y2="245" stroke="#1E8A5A" stroke-width="2.2" marker-end="url(#ar2b)"/>
+  <text x="560" y="274" text-anchor="middle" class="t-g">① G₂ = r₃</text>
+  <text x="365" y="274" text-anchor="middle" class="t-g">② G₁ = r₂ + γG₂</text>
+  <text x="178" y="274" text-anchor="middle" class="t-g">③ G₀ = r₁ + γG₁</text>
+</svg>
+<figcaption>Top: Q-learning changes one number per step, while the game is running. Bottom: MC changes <b>nothing</b> while playing; when the game ends it walks backwards (green) and updates <b>every</b> visited state with its real return, in order ①②③.</figcaption>
+</figure>
+
+<h3>The control loop</h3>
+<figure>
+<svg viewBox="0 0 760 180" role="img" aria-label="MC control loop: play a whole game with epsilon-greedy Q, game ends, walk backwards computing G, update Q by averaging, policy uses new Q in the next game">
+  <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="10" y="20" width="200" height="62" rx="5" class="bx"/><text x="110" y="44" text-anchor="middle" font-weight="700">1 · PLAY a whole game</text><text x="110" y="65" text-anchor="middle" class="t-m">ε-greedy on Q, record (s,a,r)</text>
+  <line x1="210" y1="51" x2="268" y2="51" class="ln" marker-end="url(#ar3)"/><text x="239" y="43" text-anchor="middle" class="t-m">ends</text>
+  <rect x="270" y="20" width="220" height="62" rx="5" class="bxa"/><text x="380" y="44" text-anchor="middle" font-weight="700">2 · WALK BACKWARDS</text><text x="380" y="65" text-anchor="middle">G ← r + γ·G</text>
+  <line x1="490" y1="51" x2="548" y2="51" class="ln" marker-end="url(#ar3)"/>
+  <rect x="550" y="20" width="200" height="62" rx="5" class="bxg"/><text x="650" y="44" text-anchor="middle" font-weight="700">3 · AVERAGE IT IN</text><text x="650" y="65" text-anchor="middle">Q[s,a] += (G − Q[s,a]) / N</text>
+  <path d="M650,82 V150 H110 V84" class="ln" marker-end="url(#ar3)"/>
+  <text x="380" y="142" text-anchor="middle" class="t-m">4 · next game: ε-greedy now reads the improved Q → the policy got better</text>
+</svg>
+<figcaption>Steps 2 and 3 happen together in one backwards loop. Nothing in the loop needs the rule book or a guess of another state.</figcaption>
+</figure>
+
+<h3>Pseudocode</h3>
+<div class="two">
+<div>
+<p><b>MC prediction</b> (grade a fixed policy π)</p>
+<pre>V(s) = 0, N(s) = 0 for all s
+repeat for many games:
+  play a game with π, record
+     s₀,a₀,r₁, s₁,a₁,r₂, …, END
+  G = 0
+  for t = last … 0:  <span class="c"># backwards</span>
+    G = r_(t+1) + γ·G
+    if first visit of s_t:
+      N(s_t) += 1
+      V(s_t) += (G − V(s_t)) / N(s_t)</pre>
+</div>
+<div>
+<p><b>MC control</b> (on-policy, ε-greedy)</p>
+<pre>Q(s,a) = 0, N(s,a) = 0
+repeat for many games:
+  play a game with ε-greedy(Q),
+     record (s, a, r) per step
+  G = 0
+  for t = last … 0:  <span class="c"># backwards</span>
+    G = r_(t+1) + γ·G
+    if first visit of (s_t, a_t):
+      N(s_t,a_t) += 1
+      Q(s_t,a_t) += (G − Q)/N
+policy = argmax_a Q(s, a)</pre>
+</div>
+</div>
+
+<h3>Why exploration is still needed</h3>
+<p>If the policy is greedy, an action that looked bad early is never tried again, so its average never gets corrected. Two fixes:</p>
+<ul>
+<li><b>ε-greedy</b> (what we use): every action keeps at least an ε/2 chance in Blackjack (2 actions). The policy we learn is the best <i>ε-greedy</i> policy; at test time we drop ε.</li>
+<li><b>Exploring starts</b>: start every game from a random state with a random first action, then be fully greedy. Every (s, a) pair gets started from sometimes. Easy in a simulator, impossible in real life (you can't "start" a patient in a random state). Chapter 10 tries it.</li>
+</ul>
+
+<!-- ═══════════════════ 06 BLACKJACK ═══════════════════ -->
+<h2><span class="n">06</span>Blackjack: the game</h2>
+<p class="sub"><code>gym.make("Blackjack-v1")</code>, Sutton &amp; Barto rules (the default, <code>sab=True</code>).</p>
+
+<div class="two">
+<div>
+<ul>
+<li>You and the dealer get 2 cards. You see <b>one</b> dealer card.</li>
+<li>Cards: 2–9 as printed, J/Q/K count 10, ace counts 1 or 11. Infinite deck (cards drawn with replacement).</li>
+<li>Goal: get closer to 21 than the dealer without going over ("bust").</li>
+<li><b>Hit</b> (action 1): take a card. Over 21: you lose at once.</li>
+<li><b>Stick</b> (action 0): stop. Then the dealer draws until 17 or more. Higher sum wins; dealer bust = you win.</li>
+<li>Reward: <b>+1 win, 0 draw, −1 loss</b>, and 0 on every step before the end. γ = 1.</li>
+</ul>
+</div>
+<div>
+<table>
+<tr><th>Piece</th><th>In Blackjack-v1</th></tr>
+<tr><td>State</td><td><code>(your sum, dealer card, usable ace)</code><br>e.g. <code>(13, 2, 1)</code> = soft 13 vs a 2</td></tr>
+<tr><td>Actions</td><td>0 = stick, 1 = hit</td></tr>
+<tr><td>Reward</td><td>only at the end: +1 / 0 / −1</td></tr>
+<tr><td>Episode</td><td>one hand; usually 1–3 decisions</td></tr>
+<tr><td>States that matter</td><td>sum 12–21 × dealer A–10 × ace yes/no = <b>200</b> (the run saw 280 including sums 4–11)</td></tr>
+</table>
+</div>
+</div>
+
+<h3>Why Blackjack is the perfect Monte Carlo game</h3>
+<ul>
+<li><b>The only reward is at the end.</b> Every step before gives 0. With γ = 1, the return of every state in a game is simply the final result. MC gives each visited state the answer after one game; Q-learning must pass it back step by step through guesses.</li>
+<li><b>Nobody hands you the rule book.</b> You could in principle calculate the dealer's chances of reaching 17, 18, … 21 or busting from every up-card, but it's messy. MC just plays, millions of times if needed. Simulating a hand takes microseconds.</li>
+<li><b>Games always end</b>, quickly. MC's one hard requirement is met.</li>
+</ul>
+
+<div class="box warn"><span class="tag">Action probabilities vs environment probabilities</span>
+<p>Two different kinds of chance appear in this booklet. <b>The deck</b> decides which card comes: that's the environment, MC never sees those probabilities. <b>The policy</b> decides hit or stick: "stick on 20" is deterministic, ε-greedy and the random player have action probabilities. Importance sampling (chapter 12) uses only the <b>action</b> probabilities, never the deck's.</p>
+</div>
+
+<h3>The two policies we start from</h3>
+<table>
+<tr><th>Policy</th><th>Rule</th><th>In code</th></tr>
+<tr><td><b>Stick on 20+</b> (the simple one)</td><td>Hit until your sum is 20 or 21, then stick.</td><td><code>STICK if s[0] &gt;= 20 else HIT</code></td></tr>
+<tr><td><b>Random</b></td><td>Flip a coin at every decision.</td><td><code>rng.integers(2)</code></td></tr>
+</table>
+<p>"Stick on 20" sounds bold. It is: it hits on 18 and 19, which usually busts. Monte Carlo will show exactly how bad that is, state by state, and then find something much better.</p>
+
+<!-- ═══════════════════ 07 CODE ═══════════════════ -->
+<h2><span class="n">07</span>The code, line by line</h2>
+<p class="sub"><code>mc.py</code>: shared by every script. Real excerpts.</p>
+
+<h3>① Playing one game: just record, learn nothing</h3>
+<pre><span class="k">def</span> play_episode(env, policy, rng):
+    episode = []
+    s = as_state(env.reset()[0])
+    done = <span class="k">False</span>
+    <span class="k">while not</span> done:
+        a = policy(s, rng)
+        obs, r, terminated, truncated, _ = <span class="h">env.step(a)</span>       <span class="c"># the only contact with the world</span>
+        episode.append((s, a, r))                               <span class="c"># reward that came AFTER a in s</span>
+        s = as_state(obs)
+        done = terminated <span class="k">or</span> truncated
+    <span class="k">return</span> episode</pre>
+
+<h3>② Prediction: walk backwards, average</h3>
+<pre><span class="k">def</span> mc_prediction(env, policy, episodes, gamma=1.0, first_visit=<span class="k">True</span>, seed=0):
+    V = defaultdict(float)                                    <span class="c"># unseen state → 0.0</span>
+    N = defaultdict(int)
+    <span class="k">for</span> _ <span class="k">in</span> range(episodes):
+        episode = play_episode(env, policy, rng)              <span class="c"># 1. play to the END</span>
+        first = first_visits([s <span class="k">for</span> s, _, _ <span class="k">in</span> episode])
+        G = 0.0
+        <span class="k">for</span> t <span class="k">in</span> <span class="h">reversed(range(len(episode)))</span>:           <span class="c"># 2. walk BACKWARDS</span>
+            s, a, r = episode[t]
+            G = r + gamma * G                                 <span class="c">#    real return from step t</span>
+            <span class="k">if</span> first_visit <span class="k">and</span> first[s] != t:
+                <span class="k">continue</span>                                      <span class="c">#    count s once per game</span>
+            N[s] += 1
+            V[s] += (G - V[s]) / N[s]                         <span class="c"># 3. the bandit's running mean</span>
+    <span class="k">return</span> V, N</pre>
+
+<table>
+<tr><th style="width:30%">Line</th><th>Meaning</th></tr>
+<tr><td><code>defaultdict(float)</code></td><td>Blackjack states are tuples like <code>(13, 2, 1)</code>, so a dict is easier than a numpy array. A never-seen state reads as 0.0 (a placeholder, not knowledge).</td></tr>
+<tr><td><code>play_episode(...)</code></td><td>The whole game happens here. <b>No table changes</b> during the game.</td></tr>
+<tr><td><code>reversed(range(...))</code></td><td>The backwards walk. This is the line that makes it Monte Carlo.</td></tr>
+<tr><td><code>G = r + gamma * G</code></td><td>Before this line, G is the return from step t+1; after it, from step t. <b>Calculated</b> from real rewards; nothing is read from V.</td></tr>
+<tr><td><code>first[s] != t</code></td><td>First-visit check: skip a state if it already appeared earlier in this game.</td></tr>
+<tr><td><code>V[s] += (G - V[s]) / N[s]</code></td><td>Updates <b>the visited state s</b> itself (not "the state you left" vs "landed": every visited state is updated once the game is over). Returns nothing; it changes the table.</td></tr>
+</table>
+
+<h3>③ Control: the same loop on Q, with ε-greedy play</h3>
+<pre><span class="k">def</span> mc_control(env, episodes, eps=0.1, gamma=1.0, seed=0, exploring_starts=<span class="k">False</span>):
+    Q = defaultdict(<span class="k">lambda</span>: np.zeros(2))                    <span class="c"># Q[s] = [Q(stick), Q(hit)]</span>
+    N = defaultdict(<span class="k">lambda</span>: np.zeros(2))
+    explore = epsilon_greedy_policy(Q, eps)                    <span class="c"># reads the LIVE Q every call</span>
+    <span class="k">for</span> ep <span class="k">in</span> range(episodes):
+        episode = play_episode(env, explore, rng)               <span class="c"># 1. whole game, learn nothing</span>
+        first = first_visits([(s, a) <span class="k">for</span> s, a, _ <span class="k">in</span> episode])
+        G = 0.0
+        <span class="k">for</span> t <span class="k">in</span> reversed(range(len(episode))):              <span class="c"># 2. game over: walk backwards</span>
+            s, a, r = episode[t]
+            G = r + gamma * G
+            <span class="k">if</span> first[(s, a)] != t:
+                <span class="k">continue</span>
+            N[s][a] += 1
+            Q[s][a] += (G - Q[s][a]) / N[s][a]                  <span class="c"># 3. average of real returns</span>
+    <span class="k">return</span> Q, N, game_rewards</pre>
+<p>Compare with your Q-learning <code>train()</code>: the inner <code>while</code> loop and its update are replaced by "play the game, then a backwards <code>for</code> loop". There is no <code>Q[s2]</code> anywhere: MC never looks up the next state's value. And there is no policy-improvement line: because <code>explore</code> reads the current Q, the policy improves by itself after every game.</p>
+
+<h3>④ Testing</h3>
+<pre><span class="k">def</span> win_draw_loss(env, policy, games=100_000, seed=12345):
+    finals = np.array([sum(r <span class="k">for</span> _, _, r <span class="k">in</span> play_episode(env, policy, rng)) <span class="k">for</span> _ <span class="k">in</span> range(games)])
+    <span class="k">return</span> 100*np.mean(finals &gt; 0), 100*np.mean(finals == 0), 100*np.mean(finals &lt; 0), finals.mean()</pre>
+<p>The test uses <code>greedy(Q)</code> (always argmax, no ε) and does not learn. Same idea as <code>evaluate()</code> in project 3.</p>
+
+<!-- ═══════════════════ 08 PREDICTION RUN ═══════════════════ -->
+<h2><span class="n">08</span>Running it: prediction</h2>
+<p class="sub">Real output of <code>python blackjack_prediction.py</code>: grading the "stick on 20+" policy.</p>
+
+<h3>Part 1 · One game, and the backwards update, with real numbers</h3>
+<p>The script first plays 10,000 games (so the table already has some numbers), then plays one more game and prints everything:</p>
+<pre>The game, step by step (nothing is learned while playing):
+  step 0: state (sum  9, dealer  7, no ace)  -> hit    reward +0
+  step 1: state (sum 18, dealer  7, no ace)  -> hit    reward +0     <span class="c">← the policy hits on 18!</span>
+  step 2: state (sum 21, dealer  7, no ace)  -> stick  reward +1     <span class="c">← lucky 3, then a win</span>
+  game over: WIN
+
+NOW the update, walking BACKWARDS from the last step (γ = 1):
+  step 2: G = +1 + 1 × 0  = +1   V(21, 7, no ace): +0.908 + (+1 − 0.908) / 77  = <span class="h">+0.909</span>
+  step 1: G = +0 + 1 × +1 = +1   V(18, 7, no ace): −0.792 + (+1 + 0.792) / 102 = <span class="h">−0.775</span>
+  step 0: G = +0 + 1 × +1 = +1   V( 9, 7, no ace): −0.292 + (+1 + 0.292) / 25  = <span class="h">−0.240</span></pre>
+
+<table>
+<tr><th style="width:30%">What happened</th><th>What it shows</th></tr>
+<tr><td>3 rewards: 0, 0, +1</td><td>Only the last step has a non-zero reward. With γ = 1, <b>every</b> visited state gets G = +1.</td></tr>
+<tr><td>Order: step 2, then 1, then 0</td><td>The <b>backwards</b> walk. Each G is built from the one after it.</td></tr>
+<tr><td>Three states updated</td><td>One game updated <b>all three</b> states it visited, including (sum 9), two steps away from the reward. Q-learning would have changed only (sum 21) with real news.</td></tr>
+<tr><td>V(18, 7) only moved from −0.792 to −0.775</td><td>This was one lucky win. Hitting on 18 usually busts, and 101 earlier games said so. Dividing by N = 102 stops one lucky game from fooling us.</td></tr>
+<tr><td>Is V(18, 7) bad because 18 is bad?</td><td>No! 18 is a good hand. Its value is bad <b>for this policy</b>, which hits on 18. V<sub>π</sub> always grades the state <i>and</i> the policy together.</td></tr>
+</table>
+
+<h3>Part 2 · More games, less noise</h3>
+<table>
+<tr><th>State (your sum, dealer card)</th><th class="n">V after 10,000 games</th><th class="n">visits</th><th class="n">V after 500,000 games</th><th class="n">visits</th></tr>
+<tr><td>20 vs 10, no ace</td><td class="n">+0.411</td><td class="n">587</td><td class="n">+0.437</td><td class="n">29,880</td></tr>
+<tr><td>21 vs 10, no ace</td><td class="n">+0.862</td><td class="n">298</td><td class="n">+0.890</td><td class="n">15,260</td></tr>
+<tr><td>19 vs 10, no ace</td><td class="n">−0.807</td><td class="n">446</td><td class="n">−0.748</td><td class="n">22,176</td></tr>
+<tr><td>13 vs 2, no ace</td><td class="n">−0.716</td><td class="n">95</td><td class="n">−0.601</td><td class="n">4,732</td></tr>
+<tr><td>13 vs 2, usable ace</td><td class="n">−0.111</td><td class="n">9</td><td class="n">−0.226</td><td class="n">451</td></tr>
+<tr><td>21 vs A, usable ace</td><td class="n">+0.659</td><td class="n">41</td><td class="n">+0.676</td><td class="n">2,274</td></tr>
+</table>
+<p>States with few visits (9 visits for soft 13 vs 2) jump around; states with tens of thousands of visits are stable to about ±0.01. That's the 1/√N rule: 50× more games, about 7× less noise.</p>
+
+<figure><img src="file:///D:/Langchain/rl_topics/02_monte_carlo/prediction_heatmaps.png" alt="Value heatmaps of the stick-on-20 policy after 10,000 and 500,000 games, usable ace and no usable ace"><figcaption><code>prediction_heatmaps.png</code>. Blue = good for you, red = bad. Top row after 10,000 games (patchy: the usable-ace states got very few visits, some cells show ±1.00 from one or two games). Bottom row after 500,000 games: smooth.</figcaption></figure>
+
+<h3>What to notice in the heatmaps</h3>
+<ul>
+<li><b>A cliff between 19 and 20.</b> At 20 or 21 the policy sticks and usually wins (+0.6 to +0.9). At 12–19 it keeps hitting and usually busts: about <b>−0.65</b> on average (no ace). The value surface is the <i>policy's</i> fingerprint.</li>
+<li><b>A usable ace softens the blow</b> (−0.2 to −0.5 instead of −0.65): the ace can switch from 11 to 1, so the next hit cannot bust you.</li>
+<li><b>The dealer's ace column is the worst</b> everywhere (20 vs A is only +0.14): a dealer showing an ace often makes 21.</li>
+<li><b>Same states, two answers in Blackjack's case?</b> No: first-visit and every-visit gave <b>identical</b> values (biggest difference 0.000000), because none of 100,000 games repeated a state.</li>
+</ul>
+<figure><img src="file:///D:/Langchain/rl_topics/02_monte_carlo/prediction_surface.png" alt="3D value surfaces of the stick-on-20 policy"><figcaption><code>prediction_surface.png</code>: the same 500,000-game values as 3D surfaces (the classic Sutton &amp; Barto picture). The wall at sums 20–21 is the moment the policy finally sticks.</figcaption></figure>
+
+<!-- ═══════════════════ 09 CONTROL RUN ═══════════════════ -->
+<h2><span class="n">09</span>Running it: control</h2>
+<p class="sub">Real output of <code>python blackjack_control.py</code>: 500,000 training games, ε = 0.1, γ = 1, about 80 seconds.</p>
+
+<h3>The learned stick / hit chart</h3>
+<div class="two">
+<div>
+<div class="board"><div class="cap">USABLE ACE · rows = your sum, columns = dealer card</div>
+<table class="pc">
+<tr><th></th><th>A</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th></tr>
+<tr><th>21</th><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>20</th><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>19</th><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>18</th><td class="Hh">H</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="Hh">H</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="Hh">H</td></tr>
+<tr><th>17</th><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="S">S</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+<tr><th>16</th><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+<tr><th>15</th><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+<tr><th>14</th><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+<tr><th>13</th><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+<tr><th>12</th><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="S">S</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+</table></div>
+</div>
+<div>
+<div class="board"><div class="cap">NO USABLE ACE</div>
+<table class="pc">
+<tr><th></th><th>A</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th></tr>
+<tr><th>21</th><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>20</th><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>19</th><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>18</th><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>17</th><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>16</th><td class="Hh">H</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="Hh">H</td><td class="Hh">H</td><td class="S">S</td><td class="S">S</td></tr>
+<tr><th>15</th><td class="Hh">H</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+<tr><th>14</th><td class="Hh">H</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+<tr><th>13</th><td class="Hh">H</td><td class="Hh">H</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+<tr><th>12</th><td class="Hh">H</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="S">S</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td><td class="Hh">H</td></tr>
+</table></div>
+</div>
+</div>
+<p style="margin-top:8px">The picture makes sense to any card player: <b>when the dealer shows a weak card (2–6), stick early</b> and let the dealer bust; when the dealer shows a strong card (7–A), keep hitting up to 17. With a usable ace, hit more boldly (a hit can't bust you). Nobody told the agent any of this. It came only from averaging finished games.</p>
+
+<h3>Win / draw / loss: 100,000 test games each, no exploration</h3>
+<table>
+<tr><th>Policy</th><th class="n">Win %</th><th class="n">Draw %</th><th class="n">Loss %</th><th class="n">Average result per game</th></tr>
+<tr><td>random (coin flip)</td><td class="n">28.2</td><td class="n">4.1</td><td class="n">67.7</td><td class="n">−0.395</td></tr>
+<tr><td>stick on 20+ (the simple policy)</td><td class="n">29.9</td><td class="n">5.5</td><td class="n">64.6</td><td class="n">−0.347</td></tr>
+<tr><td>stick on 17+ (copy the dealer)</td><td class="n">41.1</td><td class="n">10.2</td><td class="n">48.7</td><td class="n">−0.076</td></tr>
+<tr><td><b>learned by MC</b></td><td class="n"><b>43.7</b></td><td class="n">8.7</td><td class="n"><b>47.7</b></td><td class="n"><b>−0.040</b></td></tr>
+</table>
+<p>The learned policy loses <b>4 cents per 1-rupee... per unit bet</b> on average, against 35 for the simple policy: almost <b>9× smaller losses</b>. It still loses: Blackjack under these rules favours the house (the dealer wins when both bust, because you bust first). No policy can make the average positive here.</p>
+
+<figure><img src="file:///D:/Langchain/rl_topics/02_monte_carlo/control_results.png" alt="Learned policy charts, win/draw/loss bars and learning curve"><figcaption><code>control_results.png</code>. Bottom right: the training curve (−0.15 → about −0.08) stays <b>below</b> the test line (−0.040) because 10% of training moves are random. Same story as FrozenLake's training vs test.</figcaption></figure>
+
+<h3>Looking inside Q: some squares are near-ties</h3>
+<table>
+<tr><th>State</th><th class="n">Q(stick)</th><th class="n">tries</th><th class="n">Q(hit)</th><th class="n">tries</th><th>Learned</th></tr>
+<tr><td>20 vs 10, no ace</td><td class="n">+0.437</td><td class="n">21,343</td><td class="n">−0.864</td><td class="n">1,141</td><td>STICK (obvious)</td></tr>
+<tr><td>18 vs 9, no ace</td><td class="n">−0.209</td><td class="n">3,994</td><td class="n">−0.560</td><td class="n">207</td><td>STICK (clear)</td></tr>
+<tr><td>12 vs 4, no ace</td><td class="n">−0.235</td><td class="n">3,943</td><td class="n">−0.327</td><td class="n">211</td><td>STICK</td></tr>
+<tr><td>16 vs 10, no ace</td><td class="n">−0.581</td><td class="n">16,862</td><td class="n">−0.594</td><td class="n">2,155</td><td>STICK (near-tie)</td></tr>
+<tr><td>12 vs 2, no ace</td><td class="n">−0.300</td><td class="n">3,799</td><td class="n">−0.301</td><td class="n">395</td><td>STICK (a coin toss)</td></tr>
+<tr><td>13 vs 2, no ace</td><td class="n">−0.402</td><td class="n">244</td><td class="n">−0.330</td><td class="n">3,720</td><td>HIT (stick under-tried)</td></tr>
+</table>
+<ul>
+<li><b>16 vs 10</b> is famous among card players as the hardest decision: both choices lose about 58–59% net. MC agrees it's nearly a tie.</li>
+<li><b>13 vs 2</b> shows MC's weak spot. "Stick" was tried only 244 times (only when ε forced it), so its average is still noisy (±0.06). Sutton &amp; Barto's optimal chart sticks here. More games or more exploration would fix it, and chapter 10 tests exactly that.</li>
+<li>Look at the "tries" columns: the greedy action gets ~10–20× more tries than the other one. ε-greedy spends most of its effort on the action it already believes in.</li>
+</ul>
+
+<!-- ═══════════════════ 10 EXPERIMENTS ═══════════════════ -->
+<h2><span class="n">10</span>Experiments: turning the knobs</h2>
+<p class="sub">Real output of <code>python experiments.py</code>. Every learned policy is tested on 50,000 games with no exploration.</p>
+
+<figure><img src="file:///D:/Langchain/rl_topics/02_monte_carlo/experiments.png" alt="Average result per game for each experiment"><figcaption>Average result per game (0 = break even). Every learner beats the fixed "stick on 20+" rule by a lot. The house still wins slightly: no policy reaches 0.</figcaption></figure>
+
+<h3>A · How many training games?</h3>
+<table>
+<tr><th>Training games (ε = 0.1)</th><th class="n">win %</th><th class="n">draw %</th><th class="n">loss %</th><th class="n">avg result</th></tr>
+<tr><td>stick on 20+ (no learning)</td><td class="n">29.9</td><td class="n">5.4</td><td class="n">64.6</td><td class="n">−0.347</td></tr>
+<tr><td>10,000</td><td class="n">40.9</td><td class="n">7.3</td><td class="n">51.7</td><td class="n">−0.108</td></tr>
+<tr><td>50,000</td><td class="n">42.2</td><td class="n">7.8</td><td class="n">49.9</td><td class="n">−0.077</td></tr>
+<tr><td>200,000</td><td class="n">43.3</td><td class="n">8.2</td><td class="n">48.5</td><td class="n"><b>−0.052</b></td></tr>
+</table>
+<p>More games = more returns averaged per (state, action) = less noise = better choices. Monte Carlo is <b>sample-hungry</b>: each game teaches only the 1–3 states it visited, and each answer is a noisy ±1.</p>
+
+<h3>B · How much exploration? (100,000 games)</h3>
+<table>
+<tr><th>ε</th><th class="n">test avg</th><th class="n">training avg</th><th class="n">states with an action never tried</th></tr>
+<tr><td>0.01</td><td class="n">−0.123</td><td class="n">−0.131</td><td class="n"><b>10</b></td></tr>
+<tr><td>0.1</td><td class="n"><b>−0.062</b></td><td class="n">−0.106</td><td class="n">0</td></tr>
+<tr><td>0.3</td><td class="n">−0.062</td><td class="n">−0.160</td><td class="n">0</td></tr>
+</table>
+<ul>
+<li><b>ε = 0.01</b>: too little exploring. 10 states never tried one of their two actions, so the agent can't know whether it's better. Same lesson as FrozenLake: unvisited means unknown.</li>
+<li><b>ε = 0.3</b>: the learned policy is just as good, but training games are worse (−0.160), because 30% of moves are random.</li>
+</ul>
+
+<h3>C · Exploring starts</h3>
+<p>Instead of ε-greedy, start each game with a <b>random first action</b>, then play greedily. Every (state, action) pair still gets tried, but the rest of each game is played well, so the returns are cleaner.</p>
+<table>
+<tr><th>Method (100,000 games)</th><th class="n">win %</th><th class="n">draw %</th><th class="n">loss %</th><th class="n">avg</th></tr>
+<tr><td>MC, ε = 0.1</td><td class="n">42.9</td><td class="n">8.0</td><td class="n">49.1</td><td class="n">−0.062</td></tr>
+<tr><td>MC, exploring starts</td><td class="n">43.3</td><td class="n">9.0</td><td class="n">47.7</td><td class="n"><b>−0.044</b></td></tr>
+</table>
+
+<h3>D · Monte Carlo vs Q-learning on Blackjack (100,000 games, ε = 0.1)</h3>
+<table>
+<tr><th>Method</th><th class="n">avg result</th></tr>
+<tr><td>MC, ε = 0.1</td><td class="n">−0.062</td></tr>
+<tr><td>Q-learning, α = 0.05</td><td class="n">−0.052</td></tr>
+<tr><td>Q-learning, α = 0.01</td><td class="n">−0.048</td></tr>
+</table>
+<p>They're about the same here. Blackjack games are only 1–3 moves long, so "wait for the end" costs almost nothing, and TD's one-step advantage is small. On long games (next chapter) the difference is big.</p>
+
+<!-- ═══════════════════ 11 MC VS TD ═══════════════════ -->
+<h2><span class="n">11</span>Monte Carlo vs TD (Q-learning's way)</h2>
+<p class="sub">Real output of <code>python mc_vs_td.py</code>. The same game, updated two ways.</p>
+
+<h3>One game, two learners</h3>
+<pre>
+Game:  A --(r=0)--> B --(r=−1)--> C --(r=+10)--> END        γ = 0.9,  α = 0.5
+Guesses before the game:  V(A) = 2.0   V(B) = 4.0   V(C) = 6.0
+
+MONTE CARLO: play to the END first, then walk BACKWARDS
+  C:  G = +10                    = 10.00    V(C) = 6.00 + 0.5 × (10.00 − 6.00) = 8.00
+  B:  G = −1 + 0.9 × 10.00       =  8.00    V(B) = 4.00 + 0.5 × (8.00 − 4.00)  = 6.00
+  A:  G = +0 + 0.9 × 8.00        =  7.20    V(A) = 2.00 + 0.5 × (7.20 − 2.00)  = 4.60
+
+TD(0): update DURING the game, after every step, using the next state's GUESS
+  A:  target = 0 + 0.9 × V(B)=4.00   =  3.60    V(A) = 2.00 + 0.5 × (3.60 − 2.00)  = 2.80
+  B:  target = −1 + 0.9 × V(C)=6.00  =  4.40    V(B) = 4.00 + 0.5 × (4.40 − 4.00)  = 4.20
+  C:  target = END: no future        = 10.00    V(C) = 6.00 + 0.5 × (10.00 − 6.00) = 8.00
+
+After ONE game:   MC  V(A)=4.60  V(B)=6.00  V(C)=8.00
+                  TD  V(A)=2.80  V(B)=4.20  V(C)=8.00
+</pre>
+<p><b>Monte Carlo</b> got the +10 news to A, B and C in <b>one</b> game, but had to wait for the end and trusted one game's luck. <b>TD</b> only updated C properly; A and B used old guesses and will hear the news in later games (the FrozenLake ripple).</p>
+
+<h3>Bias vs variance: why TD often learns faster anyway</h3>
+<p>On the 5-square random walk (true value of C = 0.5), the code measured the <b>target</b> each method uses for C over 10,000 games:</p>
+<table>
+<tr><th>Target for state C</th><th class="n">average</th><th class="n">spread (std)</th><th>possible values</th></tr>
+<tr><td>MC: the real final reward</td><td class="n">0.502</td><td class="n"><b>0.500</b></td><td>0 or 1</td></tr>
+<tr><td>TD: r + V(next), with good guesses</td><td class="n">0.498</td><td class="n"><b>0.167</b></td><td>0.333 or 0.667</td></tr>
+<tr><td>TD: r + V(next), with bad guesses (all 0)</td><td class="n"><b>0.000</b></td><td class="n">0.000</td><td>0</td></tr>
+</table>
+<p><b>MC is unbiased but noisy</b> (right on average, but each target is 0 or 1). <b>TD is calmer but can be biased</b> (spread 0.167, yet confidently wrong while its guesses are bad).</p>
+<figure><img style="max-width:100mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/02_monte_carlo/mc_vs_td_randomwalk.png" alt="Random walk error, MC vs TD"><figcaption>Error over 100 games, average of 100 runs. TD (blue) drops much faster than MC (orange) on this problem: after 50 games TD α = 0.05 has error 0.055, the best MC 0.112.</figcaption></figure>
+
+<!-- ═══════════════════ 12 OFF-POLICY ═══════════════════ -->
+<h2><span class="n">12</span>Off-policy: learning from others' games</h2>
+<p class="sub">Real output of <code>python off_policy.py</code>. Intuition only, with light maths.</p>
+
+<p><b>The question:</b> how good is the state (sum 13, dealer shows 2, usable ace) if I play <b>"stick on 20+"</b> (my <i>target policy</i> π)? But I have no games of my own. I only have games played by someone pressing <b>random buttons</b> (the <i>behaviour policy</i> b: hit or stick, 50/50).</p>
+
+<h3>The trick: re-weight each game</h3>
+<p>A random game that happens to look like something <i>I</i> would play is useful evidence. A game where the random player did something I would never do tells me nothing about my policy. The weight is called the <b>importance-sampling ratio</b>:</p>
+<pre style="font-size:9.6pt">
+ρ  =  product over the moves of   π(a|s) / b(a|s)
+
+    my policy would ALSO choose a:   π = 1,  b = 0.5   →  factor 1 / 0.5 = 2
+    my policy would NEVER choose a:  π = 0             →  factor 0  (the whole game counts 0)
+</pre>
+
+<h3>Five real random games</h3>
+<pre>
+game 1: 13:hit, 13:hit        result G = −1   ρ = 2 × 2 = 4   (I'd hit too, both times)
+game 2: 13:hit, 15:stick      result G = −1   ρ = 0           (I'd never stick on 15)
+game 3: 13:stick              result G = +1   ρ = 0           (I'd never stick on 13)
+game 4: 13:stick              result G = +1   ρ = 0
+game 5: 13:stick              result G = −1   ρ = 0
+</pre>
+<p>Only game 1 looks like my policy, and it counts 4 times as much, because a random player follows my policy for two moves only 1 time in 4 (0.5 × 0.5).</p>
+
+<h3>Two ways to average</h3>
+<pre>
+ordinary IS:   V = Σ ρ·G / (number of games)          unbiased, but can be wild
+weighted IS:   V = Σ ρ·G / Σ ρ                        slightly biased, much calmer
+</pre>
+<table>
+<tr><th class="n">Random games used</th><th class="n">ordinary IS error</th><th class="n">weighted IS error</th></tr>
+<tr><td class="n">10</td><td class="n">1.209</td><td class="n"><b>0.540</b></td></tr>
+<tr><td class="n">100</td><td class="n">0.107</td><td class="n">0.108</td></tr>
+<tr><td class="n">1000</td><td class="n">0.014</td><td class="n">0.015</td></tr>
+</table>
+<p>True value (from playing "stick on 20+" itself 100,000 times): <b>−0.281</b> (Sutton &amp; Barto report −0.277). After 1,000 random games both estimates average about −0.26.</p>
+<figure><img src="file:///D:/Langchain/rl_topics/02_monte_carlo/off_policy.png" alt="Ordinary vs weighted importance sampling error"><figcaption>Ordinary IS (orange) is very wild for the first few dozen games; weighted IS (blue) is calm from the start. They meet after about 30 games.</figcaption></figure>
+
+<div class="box plain"><span class="tag">Connect it to Q-learning</span>
+<p>Q-learning is also off-policy (it explores but learns about the greedy policy), yet it needs <b>no ratios</b>. Its target uses <code>max Q[s2]</code>, a guess about what the greedy policy would do next, instead of the real rest of the game. Monte Carlo uses the real rest of the game, which was played by the explorer, so it must re-weight. That's one more reason TD-style methods became so popular.</p>
+</div>
+
+<!-- ═══════════════════ 13 REAL WORLD ═══════════════════ -->
+<h2><span class="n">13</span>Real-world problems</h2>
+<p class="sub">Monte Carlo fits whenever the result only becomes clear at the end, and episodes really do end.</p>
+
+<div class="box plain"><span class="tag">When to reach for Monte Carlo</span>
+<p>✔ Episodes are fairly short and always finish. ✔ You can't trust step-by-step guesses (the state doesn't capture everything). ✔ You have a simulator you can run many times. ✘ Avoid it for never-ending tasks, or very long episodes where waiting is costly.</p>
+</div>
+
+<h3>1 · A sales call script</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>stage of the call (greeting / needs / offer / objection), customer mood (estimated), offer already made?</td></tr>
+<tr><td><b>Action</b></td><td>ask a question / present offer A / present offer B / give a discount / end the call politely</td></tr>
+<tr><td><b>Reward</b></td><td>0 during the call; at the end: +profit if the customer buys, 0 if not; small −1 for very long calls</td></tr>
+<tr><td><b>Episode</b></td><td>one call (a few minutes, always ends)</td></tr>
+<tr><td><b>Why MC</b></td><td>Whether a step was good is only known at the end (sale or not). The average of final results per (stage, action) is exactly what MC computes.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Customers differ a lot: big variance, so you need many calls. You could use off-policy MC (importance sampling) to evaluate a new script from recorded calls made with the old script.</td></tr>
+</table>
+
+<h3>2 · Choosing a treatment plan in a simulated patient</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>week of treatment, measured symptoms band, side-effect level</td></tr>
+<tr><td><b>Action</b></td><td>continue dose / increase / decrease / switch drug</td></tr>
+<tr><td><b>Reward</b></td><td>at the end of the course: +10 if recovered, −10 if not, minus side-effect penalties</td></tr>
+<tr><td><b>Episode</b></td><td>one full treatment course</td></tr>
+<tr><td><b>Why MC</b></td><td>Outcomes arrive at the end; researchers evaluate dosing rules in <b>simulated patients</b> first. MC evaluates a fixed rule by averaging outcomes, with no bootstrapped guesses about half-finished treatments.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Never learn by exploring on real patients. Real medical decisions need clinical trials and doctors. This is a "could be used for" in research simulations only.</td></tr>
+</table>
+
+<h3>3 · Game AI evaluated by self-play</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>the board position</td></tr>
+<tr><td><b>Action</b></td><td>a legal move</td></tr>
+<tr><td><b>Reward</b></td><td>+1 win, 0 draw, −1 loss, only at the end</td></tr>
+<tr><td><b>Why MC</b></td><td>"Play the game to the end many times and average the result" is exactly how <b>Monte Carlo Tree Search</b> judges positions, the planning method in booklet 08 (used in AlphaGo).</td></tr>
+</table>
+
+
+
+<!-- ═══════════════════ 14 SIDE BY SIDE ═══════════════════ -->
+<h2><span class="n">14</span>Side by side</h2>
+<p class="sub">Monte Carlo next to the methods you already know.</p>
+
+<table class="long">
+<tr><th style="width:22%"></th><th>Value iteration</th><th>Monte Carlo</th><th>TD(0) / Q-learning</th></tr>
+<tr><td>Needs the rule book?</td><td>yes</td><td><b>no</b></td><td>no</td></tr>
+<tr><td>Target</td><td>Σ P·[r + γV(s′)]</td><td><b>the real return G</b></td><td>r + γ·(guess at s′)</td></tr>
+<tr><td>Uses its own guesses? (bootstrapping)</td><td>yes</td><td><b>no</b></td><td>yes</td></tr>
+<tr><td>When it updates</td><td>sweeps</td><td><b>after the game ends</b>, walking backwards</td><td>after every step</td></tr>
+<tr><td>States updated per game</td><td>all (no games)</td><td><b>every state visited</b></td><td>one per step</td></tr>
+<tr><td>Bias</td><td>none (exact)</td><td><b>none</b></td><td>yes, early on (wrong guesses)</td></tr>
+<tr><td>Variance (noise)</td><td>none</td><td><b>high</b></td><td>lower</td></tr>
+<tr><td>Needs episodes to end?</td><td>no</td><td><b>yes</b></td><td>no</td></tr>
+<tr><td>Learning off-policy</td><td>—</td><td>needs importance sampling ratios</td><td>Q-learning: just use max</td></tr>
+<tr><td>Blackjack (100k games)</td><td>—</td><td>−0.062 (ε = 0.1), −0.044 (exploring starts)</td><td>Q-learning −0.052 / −0.048</td></tr>
+<tr><td>Random walk error after 50 games</td><td>—</td><td>0.112 (best α)</td><td><b>0.055</b> (TD, α = 0.05)</td></tr>
+<tr><td>Best when</td><td>you know the rules, small world</td><td>short episodes, end result is what matters, guesses unreliable</td><td>long or never-ending tasks, learn quickly</td></tr>
+</table>
+
+<div class="box key"><span class="tag">Remember</span>
+<p>Monte Carlo = "average the real final results". TD = "use one real step and a guess". Everything in between (n-step, TD(λ), GAE in PPO) is a mix of the two.</p>
+</div>
+
+<!-- ═══════════════════ 15 CONFUSIONS ═══════════════════ -->
+<h2><span class="n">15</span>Clearing up the confusions</h2>
+<p class="sub">Short, correct answers to common beginner questions.</p>
+
+<div class="qa"><div class="q">Does Q-learning wait for the end and update backwards?</div><p><b>No.</b> That's Monte Carlo. Q-learning updates after every step using its guess of the next state.</p></div>
+<div class="qa"><div class="q">Why walk backwards? Couldn't we go forwards?</div><p>You could, but backwards is efficient: G at step t = r<sub>t+1</sub> + γ·(G at step t+1). Walking backwards needs one multiply and one add per step.</p></div>
+<div class="qa"><div class="q">Does Monte Carlo use the Bellman equation?</div><p>Not as an update rule. It never plugs in a guess of the next state. But the values it converges to do satisfy Bellman's equation, because they are the true averages.</p></div>
+<div class="qa"><div class="q">How is this the same as my bandit's Q += (r − Q)/N?</div><p>It is the same incremental mean. In the bandit each "game" was one pull; here each (state, action) collects the returns G of the games that passed through it.</p></div>
+<div class="qa"><div class="q">Why do we still need exploration?</div><p>If the agent never tries "hit on 13 vs dealer 2", it never gets a return for it and never learns its value. With ε = 0.01, 10 states never tried one action.</p></div>
+<div class="qa"><div class="q">First-visit or every-visit: which is right?</div><p>Both converge to the true value. First-visit uses only the first time a state appears in a game; every-visit uses all of them. In Blackjack a state can't repeat (your sum only goes up, or the ace changes), so they're identical there.</p></div>
+<div class="qa"><div class="q">Is Monte Carlo slower than TD?</div><p>Often, but not always. On Blackjack (1–3 moves per game) they're similar. On long games TD usually wins because its targets are less noisy (chapter 11).</p></div>
+<div class="qa"><div class="q">What does "unbiased" mean here?</div><p>On average, the MC target equals the true value (0.502 vs 0.5). TD targets can be systematically off while the guesses are still wrong.</p></div>
+<div class="qa"><div class="q">Can Monte Carlo work if the game never ends?</div><p>No. G is the total until the end. For never-ending tasks, use TD.</p></div>
+<div class="qa"><div class="q">Why is the importance ratio 4 in game 1?</div><p>Two moves, each with π/b = 1/0.5 = 2. 2 × 2 = 4. A random player follows my policy twice in a row only 1 time in 4, so when it does, that game stands in for four.</p></div>
+<div class="qa"><div class="q">Does the learned policy beat the casino?</div><p>No. Best learned average −0.040 per game: you still lose 4 paise per rupee bet on average. RL finds the best way to play; it can't change the game's odds.</p></div>
+<div class="qa"><div class="q">Why do some learned chart cells look "wrong" compared to the textbook?</div><p>Near-ties. For (sum 12, dealer 2) Q(stick) = −0.300 vs Q(hit) = −0.301: a coin flip of noise decides the letter. More games shrink the noise.</p></div>
+
+<!-- ═══════════════════ 16 PRACTICE ═══════════════════ -->
+<h2><span class="n">16</span>Practice problems</h2>
+<p class="sub">Answers in chapter 18.</p>
+<ol>
+<li><b>Returns.</b> A game gives rewards 0, 0, 5 (γ = 0.9). Compute G at each of the three steps by walking backwards.</li>
+<li><b>Incremental mean.</b> V(s) = 0.2 after N = 4 visits. A new game gives G = −1. Compute the new V with the 1/N rule.</li>
+<li><b>Constant α.</b> Same as 2, but use α = 0.1 instead of 1/N. Which update reacts more?</li>
+<li><b>First vs every visit.</b> A game visits X (r = 2), Y (r = 0), X (r = 1), then ends; γ = 1. Give the first-visit and every-visit samples for V(X).</li>
+<li><b>MC vs TD.</b> Game: P --(r=1)--> Q --(r=0)--> END. γ = 1, α = 0.5, V(P) = 0, V(Q) = 4. Give the MC update and the TD(0) updates for both states.</li>
+<li><b>Importance ratio.</b> Behaviour policy: 3 actions, uniform. Target policy: deterministic. A game has 3 moves, all matching the target. What is ρ? What if the second move doesn't match?</li>
+<li><b>Weighted IS.</b> Three random games: (ρ = 4, G = −1), (ρ = 0, G = +1), (ρ = 2, G = +1). Compute ordinary and weighted estimates.</li>
+<li><b>Conceptual.</b> Why might MC beat TD when your state description leaves out important information (e.g. the card count in Blackjack)?</li>
+<li><b>Conceptual.</b> A robot vacuum cleans until its battery dies (one episode is about 2 hours, 7,000 steps). MC or TD? Why?</li>
+<li><b>Coding.</b> In <code>blackjack_control.py</code>, change ε to 0.05 and train for 200,000 games. Predict: will the test average be better or worse than ε = 0.1? Then run it.</li>
+<li><b>Coding.</b> Add "stick on 18+" to the test table in <code>blackjack_control.py</code>. Where will it rank?</li>
+</ol>
+
+<!-- ═══════════════════ 17 RUN + CHEAT ═══════════════════ -->
+<h2><span class="n">17</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\02_monte_carlo
+python blackjack_prediction.py   <span class="c"># value of "stick on 20+", heatmaps            (~40 s)</span>
+python blackjack_control.py      <span class="c"># learn to play: MC control, stick/hit chart   (~3 min)</span>
+python mc_vs_td.py               <span class="c"># one game updated by MC and TD; random walk  (~20 s)</span>
+python off_policy.py             <span class="c"># importance sampling from random games       (~1 min)</span>
+python experiments.py            <span class="c"># games, ε, exploring starts, Q-learning      (~4 min)</span>
+<span class="c"># add --no-show to save the charts without opening windows</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">Monte Carlo control</span>
+<pre style="background:#fff;margin:6px 0">Q = 0, N = 0 for every (s, a)
+for each game:
+  play the WHOLE game with ε-greedy(Q),
+    recording (s, a, r) at each step
+  G = 0
+  walk the steps BACKWARDS:
+    G = r + γ·G
+    (first visit of (s,a)?)
+    N[s,a] += 1
+    Q[s,a] += (G − Q[s,a]) / N[s,a]</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">Key formulas</span>
+<pre style="background:#fff;margin:6px 0">Return:   G_t = r_t+1 + γ·G_t+1
+Average:  Q += (G − Q) / N
+TD(0):    V += α(r + γV(s′) − V)
+Ratio:    ρ = Π π(a|s) / b(a|s)
+Ord. IS:  V = Σρ·G / n
+Wtd. IS:  V = Σρ·G / Σρ</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>Monte Carlo plays the whole game, then walks backwards giving every visited (state, action) the real return G.</li>
+<li>Its value is just an average of returns, the same incremental mean as your bandit.</li>
+<li>No guesses means no bias, but one game's luck makes the target noisy; TD trades a little bias for much less noise.</li>
+<li>Learning from someone else's games needs importance-sampling weights ρ = Π π/b.</li>
+</ol>
+</div>
+
+<!-- ═══════════════════ 18 ANSWERS ═══════════════════ -->
+<h2><span class="n">18</span>Answers to the practice problems</h2>
+<ol>
+<li>Backwards: step 3: G = 5. Step 2: G = 0 + 0.9 × 5 = <b>4.5</b>. Step 1: G = 0 + 0.9 × 4.5 = <b>4.05</b>.</li>
+<li>N becomes 5: V = 0.2 + (−1 − 0.2)/5 = 0.2 − 0.24 = <b>−0.04</b>.</li>
+<li>V = 0.2 + 0.1 × (−1.2) = <b>0.08</b>. Here 1/N = 0.2 > α = 0.1, so the 1/N rule reacts more. Later, when N is large, constant α reacts more (and keeps adapting if the world changes).</li>
+<li>Returns: from the first X: 2 + 0 + 1 = 3; from Y: 1; from the second X: 1. First-visit sample for V(X): <b>3</b>. Every-visit samples: <b>3 and 1</b> (average 2).</li>
+<li>MC: G(Q) = 0 → V(Q) = 4 + 0.5 × (0 − 4) = <b>2</b>; G(P) = 1 + 0 = 1 → V(P) = 0 + 0.5 × 1 = <b>0.5</b>. TD: P: target = 1 + V(Q) = 5 → V(P) = <b>2.5</b>; Q: target = 0 (end) → V(Q) = <b>2</b>. TD made P optimistic because Q's old guess (4) was too high: that's bias.</li>
+<li>Each matching move: 1 / (1/3) = 3. ρ = 3 × 3 × 3 = <b>27</b>. If the second move doesn't match, π = 0 there, so ρ = <b>0</b>.</li>
+<li>Σρ·G = 4·(−1) + 0 + 2·(+1) = −2. Ordinary: −2 / 3 = <b>−0.667</b>. Weighted: −2 / (4 + 0 + 2) = <b>−0.333</b>.</li>
+<li>TD's target trusts V(s′), and if the state hides important information, V(s′) mixes up different situations and is systematically wrong. MC uses the real final result, which already "knows" what happened.</li>
+<li><b>TD.</b> 7,000 steps per episode means MC learns nothing for 2 hours and then gets one very noisy return. TD learns after every step.</li>
+<li>A reasonable prediction: slightly worse or about the same. Less exploration means fewer tries of rarely chosen actions (experiment B: ε = 0.01 left 10 states untested), but the training games are closer to greedy. Run it to check.</li>
+<li>Prediction: between "stick on 17+" (−0.076) and "stick on 20+" (−0.347). Waiting for 20 busts far too often; sticking from 18 avoids most of that, but 17+ stops even earlier and the chapter 09 table shows that pays off.</li>
+</ol>
+
+</main>
+</body>
+</html>

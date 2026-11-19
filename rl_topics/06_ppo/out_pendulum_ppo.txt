@@ -1,0 +1,37 @@
+PPO on Pendulum-v1 (continuous torque), γ = 0.9, rewards scaled ×0.1
+
+  step   2,048  avg return (last 20 games) -1134.7  approx_kl 0.0028  clip_frac 0.024  entropy 0.943
+  step  20,480  avg return (last 20 games) -1069.6  approx_kl 0.0103  clip_frac 0.135  entropy 0.862
+  step  38,912  avg return (last 20 games)  -797.6  approx_kl 0.0180  clip_frac 0.233  entropy 0.784
+  step  57,344  avg return (last 20 games)  -298.4  approx_kl 0.0036  clip_frac 0.034  entropy 0.574
+  step  75,776  avg return (last 20 games)  -252.1  approx_kl 0.0114  clip_frac 0.136  entropy 0.426
+  step  94,208  avg return (last 20 games)  -183.8  approx_kl 0.0122  clip_frac 0.094  entropy 0.351
+  step 112,640  avg return (last 20 games)  -235.9  approx_kl 0.0053  clip_frac 0.058  entropy 0.215
+  step 131,072  avg return (last 20 games)  -202.9  approx_kl 0.0042  clip_frac 0.043  entropy 0.167
+  step 149,504  avg return (last 20 games)  -243.7  approx_kl 0.0047  clip_frac 0.046  entropy 0.142
+  step 167,936  avg return (last 20 games)  -194.7  approx_kl 0.0137  clip_frac 0.051  entropy 0.115
+  step 186,368  avg return (last 20 games)  -213.9  approx_kl 0.0062  clip_frac 0.053  entropy 0.083
+  step 204,800  avg return (last 20 games)  -148.5  approx_kl 0.0049  clip_frac 0.045  entropy 0.045
+  step 223,232  avg return (last 20 games)  -192.7  approx_kl 0.0081  clip_frac 0.101  entropy -0.038
+  step 241,664  avg return (last 20 games)  -171.4  approx_kl 0.0043  clip_frac 0.041  entropy -0.050
+  step 260,096  avg return (last 20 games)  -182.9  approx_kl 0.0054  clip_frac 0.051  entropy -0.045
+  step 278,528  avg return (last 20 games)  -147.0  approx_kl 0.0083  clip_frac 0.104  entropy -0.054
+  step 296,960  avg return (last 20 games)  -171.4  approx_kl 0.0048  clip_frac 0.050  entropy -0.061
+  step 299,008  avg return (last 20 games)  -204.2  approx_kl 0.0010  clip_frac 0.005  entropy -0.062
+  (28 s)
+
+First 50 games: avg -1195    last 50 games: avg -189
+Exam, 20 new games, centre of the bell curve: avg -172, best -0, worst -471   (random play ≈ −1200, 0 = perfect)
+Learned bell-curve width (std of the torque): 0.228  (started at 0.607)
+
+The policy's chosen torque (bell-curve centre), pendulum still, at different angles:
+  angle  -90° (0 = upright)   torque +3.65
+  angle  -30° (0 = upright)   torque +3.67
+  angle  -10° (0 = upright)   torque +1.78
+  angle   +0° (0 = upright)   torque -0.04
+  angle  +10° (0 = upright)   torque -1.77
+  angle  +30° (0 = upright)   torque -3.16
+  angle  +90° (0 = upright)   torque -2.88
+  angle +180° (0 = upright)   torque -0.16
+
+Chart saved to pendulum_ppo.png

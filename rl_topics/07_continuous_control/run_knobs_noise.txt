@@ -1,0 +1,34 @@
+
+σ = 0 (no noise): 10,000 steps
+    step  1,000   test score  -1046.6   critic thinks start is worth     0.1, really  -454.6   (   0s)
+    step  2,000   test score  -1405.5   critic thinks start is worth   -10.5, really  -567.4   (   4s)
+    step  3,000   test score   -561.3   critic thinks start is worth   -27.8, really  -259.3   (   8s)
+    step  4,000   test score   -318.8   critic thinks start is worth   -53.8, really  -164.5   (  13s)
+    step  5,000   test score    -99.8   critic thinks start is worth   -73.1, really   -88.5   (  17s)
+    step  6,000   test score    -97.8   critic thinks start is worth   -82.3, really   -87.5   (  22s)
+    step  7,000   test score    -97.5   critic thinks start is worth   -87.3, really   -87.3   (  26s)
+    step  8,000   test score    -98.2   critic thinks start is worth   -88.4, really   -87.6   (  30s)
+    step  9,000   test score    -97.6   critic thinks start is worth   -88.6, really   -87.5   (  35s)
+    step 10,000   test score    -98.0   critic thinks start is worth   -86.4, really   -87.6   (  39s)
+
+σ = 0.5 (lots): 10,000 steps
+    step  1,000   test score  -1046.6   critic thinks start is worth     0.1, really  -454.6   (   0s)
+    step  2,000   test score  -1386.4   critic thinks start is worth   -10.4, really  -554.1   (   4s)
+    step  3,000   test score   -623.5   critic thinks start is worth   -27.4, really  -277.9   (   8s)
+    step  4,000   test score   -129.5   critic thinks start is worth   -53.6, really  -106.3   (  12s)
+    step  5,000   test score    -97.5   critic thinks start is worth   -73.9, really   -87.2   (  16s)
+    step  6,000   test score    -96.6   critic thinks start is worth   -83.1, really   -87.2   (  20s)
+    step  7,000   test score    -97.0   critic thinks start is worth   -87.2, really   -87.3   (  24s)
+    step  8,000   test score    -96.5   critic thinks start is worth   -89.0, really   -87.1   (  28s)
+    step  9,000   test score    -96.2   critic thinks start is worth   -87.1, really   -87.8   (  32s)
+    step 10,000   test score    -96.1   critic thinks start is worth   -84.4, really   -87.6   (  35s)
+
+========================================================================
+PART 'noise': test score (avg of 5 games) at each 1,000 steps
+========================================================================
+  σ = 0.1 (normal)          -1047  -1405   -666   -128   -100    -98    -97    -98    -97    -96
+  σ = 0 (no noise)          -1047  -1405   -561   -319   -100    -98    -97    -98    -98    -98
+  σ = 0.5 (lots)            -1047  -1386   -623   -130    -98    -97    -97    -97    -96    -96
+                               1k     2k     3k     4k     5k     6k     7k     8k     9k    10k
+
+Saved knobs_noise.png and knobs_noise.json

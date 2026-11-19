@@ -1,0 +1,24 @@
+  no baseline        seed 0: avg score games 1-100   92.6 | last 100   95.3 | test (dice)  103.2 | test (greedy)  103.3
+  no baseline        seed 1: avg score games 1-100   16.2 | last 100  135.9 | test (dice)  247.8 | test (greedy)  343.3
+  no baseline        seed 2: avg score games 1-100   36.9 | last 100  463.4 | test (dice)  408.6 | test (greedy)  500.0
+
+  with baseline      seed 0: avg score games 1-100  103.0 | last 100  500.0 | test (dice)  500.0 | test (greedy)  500.0
+  with baseline      seed 1: avg score games 1-100  101.4 | last 100  500.0 | test (dice)  500.0 | test (greedy)  500.0
+  with baseline      seed 2: avg score games 1-100   61.1 | last 100  434.6 | test (dice)  500.0 | test (greedy)  500.0
+
+  whole-game return  seed 0: avg score games 1-100   14.1 | last 100   18.2 | test (dice)   10.4 | test (greedy)    9.5
+  whole-game return  seed 1: avg score games 1-100   10.4 | last 100   36.6 | test (dice)   49.3 | test (greedy)   56.6
+  whole-game return  seed 2: avg score games 1-100   26.3 | last 100   42.8 | test (dice)   38.2 | test (greedy)   39.9
+
+Summary (mean over seeds)
+  no baseline        last-100 avg  231.5  (game-to-game spread  63.6)   test dice  253.2   greedy  315.5
+  with baseline      last-100 avg  478.2  (game-to-game spread  37.2)   test dice  500.0   greedy  500.0
+  whole-game return  last-100 avg   32.5  (game-to-game spread  15.0)   test dice   32.6   greedy   35.3
+
+Action probabilities of the best 'with baseline' policy:
+  balanced, still            P(left) 0.983   P(right) 0.017
+  pole leaning RIGHT         P(left) 0.731   P(right) 0.269
+  pole leaning LEFT          P(left) 0.999   P(right) 0.001
+  pole falling right fast    P(left) 0.000   P(right) 1.000
+
+Chart saved to cartpole_reinforce.png

@@ -1,0 +1,7 @@
+setting              seed  updates  last-50 avg   exam  final entropy   time
+separate networks       0     2000        114.7  251.6          0.523     9s
+separate networks       1     2000        170.7  385.0          0.463     7s
+shared body             0     2000         68.4  122.2          0.611     6s
+shared body             1     2000         74.6  115.2          0.617     6s
+
+Chart saved to experiments_shared.png

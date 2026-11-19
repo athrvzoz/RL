@@ -1,0 +1,29 @@
+========================================================================
+1. DDPG: the critic's hill and where the actor stands on it
+========================================================================
+  hanging down, still        μ(s) = -1.984   Q(s, μ(s)) = -243.00   ∂Q/∂a =  -5.583   top of hill at a = -2.00
+  45° right of top, still    μ(s) = +0.389   Q(s, μ(s)) =  -85.31   ∂Q/∂a =  +0.426   top of hill at a = -2.00
+  10° left of top, still     μ(s) = +1.936   Q(s, μ(s)) =    1.74   ∂Q/∂a =  +1.821   top of hill at a = +2.00
+  at top, spinning +3        μ(s) = -1.995   Q(s, μ(s)) =  -89.10   ∂Q/∂a =  -0.729   top of hill at a = -2.00
+
+========================================================================
+2. Chain rule with real numbers (state: 45° right of top, still)
+========================================================================
+  z = +0.1970   a = 2·tanh(z) = +0.3890   Q = -85.309
+  ∂Q/∂a = +0.4261           (slope of the critic's hill at that torque)
+  ∂a/∂b = 2·(1 - tanh²(z)) = 1.9243   (how the torque moves if the bias moves)
+  ∂Q/∂b = +0.4261 × 1.9243 = +0.8200
+  autograd says ∂Q/∂b = +0.8200
+  so gradient ASCENT nudges b by +lr × +0.8200 (raising the torque)
+
+========================================================================
+3. SAC: the bell curve in each state
+========================================================================
+  hanging down, still        mean  -1.907 -> torque 2·tanh = -1.914    σ = 0.497
+  45° right of top, still    mean  +0.745 -> torque 2·tanh = +1.264    σ = 0.202
+  10° left of top, still     mean  +3.071 -> torque 2·tanh = +1.991    σ = 0.281
+  at top, spinning +3        mean  -2.735 -> torque 2·tanh = -1.983    σ = 0.313
+
+  SAC α: start 0.999, after 2,000 updates 0.211, after 7,000 0.096, final 0.047
+
+Saved critic_hill.png, sac_alpha.png, pendulum_curves.png, pendulum_policy_maps.png

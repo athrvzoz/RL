@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SARSA and TD Learning</title>
+<!--STYLE-->
+</head>
+<body>
+<main>
+
+<!-- ═══════════ COVER ═══════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Booklet 01</div>
+  <h1>SARSA and<br>TD Learning</h1>
+  <p class="lede">Learn after every step instead of waiting for the game to end, and find out why a careful learner (SARSA) walks a safer path than a bold one (Q-learning). Every number here comes from code you can run in <code>rl_topics/01_sarsa_td</code>.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture</div>
+    <div><span>02</span>Words you need</div>
+    <div><span>03</span>Intuition: guessing your arrival time</div>
+    <div><span>04</span>TD(0): learning V step by step</div>
+    <div><span>05</span>From V to Q: SARSA</div>
+    <div><span>06</span>Three targets, worked by hand</div>
+    <div><span>07</span>The algorithm</div>
+    <div><span>08</span>The code, line by line</div>
+    <div><span>09</span>CliffWalking: careful vs bold</div>
+    <div><span>10</span>Experiments: ε, α and n-step</div>
+    <div><span>11</span>Real-world problems</div>
+    <div><span>12</span>Side by side</div>
+    <div><span>13</span>Clearing up the confusions</div>
+    <div><span>14</span>Practice problems</div>
+    <div><span>15</span>Run it yourself + cheat sheet</div>
+    <div><span>16</span>Answers</div>
+  </div>
+</section>
+
+<!-- ═══════════ 01 ═══════════ -->
+<h2><span class="n">01</span>The big picture</h2>
+<p class="sub">You already know one TD method. You just didn't know its family name.</p>
+
+<p>In project 3 you wrote this line: <code>target = r + γ·max Q[s2]</code>. You updated after <b>every step</b>, using your own guess for the next state. That trick has a name: <b>Temporal-Difference (TD) learning</b>. "Temporal difference" means: the difference between what you guessed <i>now</i> and what you guess <i>one step later</i>.</p>
+
+<p>Q-learning is one member of the TD family. This booklet introduces its siblings:</p>
+<ul>
+<li><b>TD(0)</b>: the simplest one. Learns V(s), "how good is this square?", for a fixed way of playing.</li>
+<li><b>SARSA</b>: learns Q(s,a) like Q-learning, but uses <b>the action it will really take next</b> instead of the best action.</li>
+<li><b>Expected SARSA</b>: uses the <b>average</b> over the actions it might take next.</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 210" role="img" aria-label="Three TD methods differ only in the future part of the target">
+  <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="70" width="200" height="70" rx="6" class="bxa"/>
+  <text x="120" y="98" text-anchor="middle" font-weight="700">target = r + γ · ?</text>
+  <text x="120" y="120" text-anchor="middle" class="t-m">"the future from s2"</text>
+  <line x1="220" y1="105" x2="300" y2="35" class="ln" marker-end="url(#a1)"/>
+  <line x1="220" y1="105" x2="300" y2="105" class="ln" marker-end="url(#a1)"/>
+  <line x1="220" y1="105" x2="300" y2="175" class="ln" marker-end="url(#a1)"/>
+  <rect x="302" y="10" width="440" height="50" rx="5" class="bx"/>
+  <text x="318" y="31" font-weight="700">Q-learning:</text><text x="420" y="31">max Q[s2]  →  the BEST next action</text>
+  <text x="318" y="50" class="t-m">"I'll assume I play perfectly from now on"</text>
+  <rect x="302" y="80" width="440" height="50" rx="5" class="bxg"/>
+  <text x="318" y="101" font-weight="700">SARSA:</text><text x="420" y="101">Q[s2, a2]  →  the action I'll REALLY take</text>
+  <text x="318" y="120" class="t-m">"I'll judge by what I actually do, mistakes included"</text>
+  <rect x="302" y="150" width="440" height="50" rx="5" class="bx"/>
+  <text x="318" y="171" font-weight="700">Expected SARSA:</text><text x="450" y="171">Σ π(a|s2)·Q[s2,a]  →  the AVERAGE</text>
+  <text x="318" y="190" class="t-m">"I'll average over everything I might do"</text>
+</svg>
+<figcaption>Everything else is the same: the Q-table, ε-greedy, the α nudge, "update the state you LEFT". One line differs.</figcaption>
+</figure>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p><b>Q-learning</b> learns how good things are <i>if you play perfectly</i>. <b>SARSA</b> learns how good things are <i>for the way you actually play</i>, including your random exploration mistakes. On a cliff edge, that difference decides whether you walk along the edge or keep your distance.</p>
+</div>
+
+<h3>Where TD sits in the family</h3>
+<table>
+<tr><th>Method</th><th>Needs the rule book?</th><th>When it updates</th><th>Uses its own guesses?</th></tr>
+<tr><td>Value iteration (project 2)</td><td>yes</td><td>sweeps, never plays</td><td>yes</td></tr>
+<tr><td>Monte Carlo (booklet 02)</td><td>no</td><td>after the game <b>ends</b></td><td>no, uses the real total</td></tr>
+<tr><td><b>TD: TD(0), SARSA, Q-learning</b></td><td>no</td><td><b>after every step</b></td><td><b>yes</b> (bootstrapping)</td></tr>
+</table>
+
+<!-- ═══════════ 02 ═══════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<p class="sub">New words in bold. Words from earlier booklets are repeated briefly.</p>
+
+<table class="long">
+<tr><th style="width:24%">Term</th><th>Meaning in plain words</th><th style="width:27%">In your code</th></tr>
+<tr><td><b>TD (temporal difference)</b></td><td>Learning from the difference between your guess now and your guess one step later.</td><td><code>td_error</code>, <code>delta</code></td></tr>
+<tr><td><b>TD error</b> δ (delta)</td><td>The surprise: target − old guess. Positive means "better than I thought".</td><td><code>td_error = target - Q[s, a]</code></td></tr>
+<tr><td><b>TD(0)</b></td><td>The simplest TD method: learn V(s) using one real step plus the guess V(s′).</td><td><code>td0_update()</code></td></tr>
+<tr><td><b>Prediction</b></td><td>The way of playing is fixed; just learn how good each state is.</td><td><code>td_prediction.py</code></td></tr>
+<tr><td><b>Control</b></td><td>Learn how to play well (find the best actions). SARSA and Q-learning are control methods.</td><td><code>cliff_walking.py</code></td></tr>
+<tr><td><b>SARSA</b></td><td>The five things one update needs: <b>S</b>tate, <b>A</b>ction, <b>R</b>eward, next <b>S</b>tate, next <b>A</b>ction.</td><td><code>s, a, r, s2, a2</code></td></tr>
+<tr><td><b>Expected SARSA</b></td><td>Like SARSA, but the future is the average of Q[s2] weighted by your own action probabilities.</td><td><code>np.dot(policy_probs(...), Q[s2])</code></td></tr>
+<tr><td><b>Behaviour policy</b></td><td>The way the agent actually plays while learning (ε-greedy: sometimes random).</td><td><code>epsilon_greedy()</code></td></tr>
+<tr><td><b>Target policy</b></td><td>The way of playing whose values you are learning.</td><td>the <code>future_value</code> line</td></tr>
+<tr><td><b>On-policy</b></td><td>Target policy = behaviour policy. You learn about how you actually play. SARSA, Expected SARSA (with ε-greedy).</td><td><code>Q[s2, a2]</code></td></tr>
+<tr><td><b>Off-policy</b></td><td>You play one way (exploring) but learn about another way (perfect greedy play). Q-learning.</td><td><code>np.max(Q[s2])</code></td></tr>
+<tr><td><b>π(a|s)</b></td><td>The agent's <b>own</b> probability of choosing action a in state s. Not the world's slip chances!</td><td><code>policy_probs()</code></td></tr>
+<tr><td><b>Greedy test</b></td><td>Play with no exploration (always the best action) to see the learned path.</td><td><code>greedy_path()</code></td></tr>
+<tr><td><b>n-step TD</b></td><td>Use n real rewards, then a guess. n = 1 is TD(0); n = whole game is Monte Carlo.</td><td><code>nstep_update()</code></td></tr>
+<tr><td><b>RMS error</b></td><td>"Root mean square" error: a single number for how far the learned values are from the true ones.</td><td><code>rms_error()</code></td></tr>
+<tr><td>Bootstrapping</td><td>Updating a guess using another guess (V(s′) or Q[s2]) instead of waiting for the real result.</td><td><code>V[s2]</code>, <code>Q[s2]</code></td></tr>
+</table>
+
+<!-- ═══════════ 03 ═══════════ -->
+<h2><span class="n">03</span>Intuition: guessing your arrival time</h2>
+<p class="sub">TD is how you already think when you travel.</p>
+
+<p>You leave school at 4:00 and guess: <b>"I'll be home at 4:40."</b></p>
+<table>
+<tr><th>Moment</th><th>What happened</th><th>New guess</th><th>Monte Carlo would…</th><th>TD does…</th></tr>
+<tr><td>4:00 leave school</td><td>—</td><td>4:40</td><td>wait</td><td>—</td></tr>
+<tr><td>4:10 reach bus stop</td><td>bus is late</td><td>4:50</td><td>wait</td><td>"my 4:00 guess was 10 min too hopeful" → fix it <b>now</b></td></tr>
+<tr><td>4:25 off the bus</td><td>traffic was light</td><td>4:45</td><td>wait</td><td>"my bus-stop guess was 5 min too pessimistic" → fix it now</td></tr>
+<tr><td>4:45 home</td><td>arrived</td><td>—</td><td>finally fix all guesses</td><td>last small fix</td></tr>
+</table>
+<p>TD learns <b>at every stop</b> from the change between two guesses. You don't need to reach home to learn that the bus being late was bad news. That's the whole idea.</p>
+
+<h3>Why the bold learner and the careful learner differ</h3>
+<p>Imagine walking along a cliff path to school. You are a little clumsy: <b>1 step in 10 goes in a random direction</b> (that's ε = 0.1).</p>
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">The bold planner (Q-learning)</span>
+<p>"The edge path is shortest. If I walk perfectly, it's the best." It plans for its <b>perfect self</b>. But it is clumsy, so in practice it falls off sometimes.</p></div>
+<div class="box ok" style="margin:0"><span class="tag">The careful planner (SARSA)</span>
+<p>"I know I stumble. Near the edge one stumble = disaster. I'll walk two rows away." It plans for its <b>real, clumsy self</b>. Longer walk, almost no falls.</p></div>
+</div>
+<p style="margin-top:10px">Neither is "wrong". They answer different questions. You'll see both, with real numbers, in chapter 09.</p>
+
+<!-- ═══════════ 04 ═══════════ -->
+<h2><span class="n">04</span>TD(0): learning V step by step</h2>
+<p class="sub"><code>td_prediction.py</code> · the 5-square random walk</p>
+
+<pre>
+          0      +----+----+----+----+----+      +1
+       [LEFT] &lt;- | A  | B  | C  | D  | E  | -&gt; [RIGHT]
+                 +----+----+----+----+----+
+                             start            each step: coin flip, left or right
+</pre>
+<p>Nobody chooses anything here: a coin decides each move. This is <b>prediction</b>: just learn V(s) = "chance of finishing on the right". The true answers are known: A = 1/6, B = 2/6, C = 3/6, D = 4/6, E = 5/6. That lets us measure how wrong each method still is.</p>
+
+<h3>The TD(0) update</h3>
+<pre style="font-size:9.6pt">
+V(s)  ←  V(s)  +  α · [ r  +  γ · V(s′)  −  V(s) ]
+                        └──── target ────┘
+                        └──────────── δ (TD error) ───────┘
+</pre>
+<p>It's the same shape as project 3's Q-learning line, with V instead of Q and no max (nobody chooses actions here).</p>
+
+<h3>The first game, by hand (real output)</h3>
+<p>Every V starts at 0.5, α = 0.1, γ = 1. The game went: C → D → C → B → A → falls off LEFT (reward 0).</p>
+<pre>
+step 1: C → D, r = 0   target = 0 + 0.500 = 0.500   δ = +0.000   V(C) 0.500 → 0.500
+step 2: D → C, r = 0   target = 0 + 0.500 = 0.500   δ = +0.000   V(D) 0.500 → 0.500
+step 3: C → B, r = 0   target = 0 + 0.500 = 0.500   δ = +0.000   V(C) 0.500 → 0.500
+step 4: B → A, r = 0   target = 0 + 0.500 = 0.500   δ = +0.000   V(B) 0.500 → 0.500
+step 5: A → L, r = 0   target = 0 + 0.000 = 0.000   δ = −0.500   V(A) 0.500 → <b>0.450</b>
+</pre>
+<p>Only <b>A</b> changed. The first four steps saw no surprise: one 0.5 guess led to another 0.5 guess. Only the last step hit something real (the end, value 0). It's the same backwards ripple you saw in FrozenLake: news travels back one square per game.</p>
+
+<h3>The same game with Monte Carlo (wait for the end)</h3>
+<pre>
+The game ended with total reward G = 0. Now update EVERY visited square toward 0:
+  A: 0.500 → 0.450    B: 0.500 → 0.450    D: 0.500 → 0.450
+  C (visited twice): 0.500 → 0.450 → 0.405
+</pre>
+<p>Monte Carlo moved every square at once, but it had to <b>wait for the end</b>, and it trusts one noisy game completely.</p>
+
+<h3>Which learns faster? 100 games, averaged over 100 runs</h3>
+<figure><img src="file:///D:/Langchain/rl_topics/01_sarsa_td/td_vs_mc.png" alt="TD(0) values approaching true values, and RMS error of TD vs Monte Carlo"><figcaption>Left: one TD(0) run creeping toward the true straight line. Right: error over games. TD (solid blue) drops faster than Monte Carlo (dashed brown).</figcaption></figure>
+<table>
+<tr><th>Method</th><th class="n">error after 10 games</th><th class="n">after 50</th><th class="n">after 100</th></tr>
+<tr><td>TD(0), α = 0.05</td><td class="n">0.175</td><td class="n">0.056</td><td class="n"><b>0.036</b></td></tr>
+<tr><td>TD(0), α = 0.1</td><td class="n">0.129</td><td class="n">0.056</td><td class="n">0.054</td></tr>
+<tr><td>Monte Carlo, α = 0.02</td><td class="n">0.199</td><td class="n">0.108</td><td class="n">0.076</td></tr>
+<tr><td>Monte Carlo, α = 0.04</td><td class="n">0.183</td><td class="n">0.106</td><td class="n">0.103</td></tr>
+</table>
+<div class="box plain"><span class="tag">Why TD wins here</span>
+<p>Monte Carlo's target is the final result of one whole random game: very <b>noisy</b> (a C-start game can end 0 or 1 by pure luck). TD's target is one step plus a guess: less noisy, but it starts out <b>biased</b> (the guesses are wrong at first). On this problem the low noise wins. People call this <b>bias vs variance</b>.</p>
+</div>
+
+<!-- ═══════════ 05 ═══════════ -->
+<h2><span class="n">05</span>From V to Q: SARSA</h2>
+<p class="sub">Now the agent chooses actions, so we learn Q(s, a), exactly like project 3.</p>
+
+<h3>The SARSA update</h3>
+<pre style="font-size:9.6pt">
+Q(s, a)  ←  Q(s, a)  +  α · [ r  +  γ · Q(s′, a′)  −  Q(s, a) ]
+                                         ▲
+                     a′ = the action you WILL actually take in s′
+                          (already chosen by ε-greedy, maybe a random one)
+</pre>
+<p>Compare with Q-learning, which you already know:</p>
+<pre style="font-size:9.6pt">
+Q(s, a)  ←  Q(s, a)  +  α · [ r  +  γ · max<sub>a</sub> Q(s′, a)  −  Q(s, a) ]
+                                         ▲
+                     the BEST action in s′, whether you'll take it or not
+</pre>
+
+<h3>Why the order of steps changes</h3>
+<p>SARSA needs a′ <b>before</b> it can update. So it chooses the next action first, uses it in the target, and then really takes it on the next step:</p>
+<figure>
+<svg viewBox="0 0 760 120" role="img" aria-label="SARSA timeline: s, a, r, s prime, a prime">
+  <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <circle cx="60" cy="50" r="26" class="bx"/><text x="60" y="56" text-anchor="middle" font-weight="700">S</text>
+  <line x1="86" y1="50" x2="188" y2="50" class="ln" marker-end="url(#a5)"/><text x="137" y="42" text-anchor="middle">A</text>
+  <rect x="190" y="30" width="110" height="40" rx="5" class="bx"/><text x="245" y="55" text-anchor="middle">R (reward)</text>
+  <line x1="300" y1="50" x2="398" y2="50" class="ln" marker-end="url(#a5)"/>
+  <circle cx="426" cy="50" r="26" class="bxa"/><text x="426" y="56" text-anchor="middle" font-weight="700">S′</text>
+  <line x1="452" y1="50" x2="560" y2="50" class="lna" marker-end="url(#a5)"/><text x="506" y="42" text-anchor="middle" class="t-a">A′ chosen</text>
+  <rect x="562" y="30" width="180" height="40" rx="5" class="bxg"/><text x="652" y="55" text-anchor="middle">update Q(S, A)</text>
+  <text x="380" y="105" text-anchor="middle" class="t-m">S, A, R, S′, A′ — the five letters give the method its name</text>
+</svg>
+<figcaption>Then A′ is really played on the next step, so the update matches what actually happens.</figcaption>
+</figure>
+
+<h3>On-policy vs off-policy, the cleanest explanation</h3>
+<table>
+<tr><th></th><th>Q-learning (off-policy)</th><th>SARSA (on-policy)</th></tr>
+<tr><td>How it actually plays</td><td>ε-greedy (sometimes random)</td><td>ε-greedy (sometimes random)</td></tr>
+<tr><td>Whose values it learns</td><td><b>a perfect greedy player</b>, who never explores</td><td><b>itself</b>, random moves included</td></tr>
+<tr><td>Question it answers</td><td>"How good is this if I play perfectly afterwards?"</td><td>"How good is this given how I really play?"</td></tr>
+<tr><td>Can learn from someone else's games?</td><td>yes (the max ignores which action was taken next)</td><td>no, needs a′ from its own policy</td></tr>
+</table>
+
+<div class="box warn"><span class="tag">Two kinds of probability, don't mix them</span>
+<p><b>The world's probabilities</b> (FrozenLake's slip chances) are rules of the environment; TD methods never see them. <b>π(a|s)</b> is the agent's <b>own</b> dice: "with ε = 0.1 and 4 actions I pick the best move 92.5% of the time and each other move 2.5%". Expected SARSA uses only this second kind, and it knows it exactly because it's its own rule. (Where 92.5% comes from: each of the 4 actions gets ε/4 = 0.025; the best one also gets 1 − ε = 0.9, so 0.925.)</p>
+</div>
+
+
+<!-- ═══════════ 06 ═══════════ -->
+<h2><span class="n">06</span>Three targets, worked by hand</h2>
+<p class="sub">Same transition, three methods. Do example 1 with a pencil first.</p>
+
+<h3>Example 1: small numbers</h3>
+<pre>
+Old guess Q(s, a) = 3.   Took action a, got r = −1, landed in s′.   α = 0.5,  γ = 0.9,  ε = 0.2
+Q(s′) for 4 actions:     [ 2,  5,  1,  0 ]           best = action 1 (value 5)
+My own probabilities π:   [0.05, 0.85, 0.05, 0.05]   (ε/4 = 0.05 each; best gets +0.8)
+</pre>
+<table>
+<tr><th>Method</th><th>Future</th><th>Target = −1 + 0.9 × future</th><th>δ = target − 3</th><th>New Q = 3 + 0.5·δ</th></tr>
+<tr><td>Q-learning</td><td>max = 5</td><td>3.5</td><td>+0.5</td><td><b>3.25</b></td></tr>
+<tr><td>SARSA, a′ = best (85%)</td><td>Q = 5</td><td>3.5</td><td>+0.5</td><td><b>3.25</b></td></tr>
+<tr><td>SARSA, a′ = action 3 (explored, 5%)</td><td>Q = 0</td><td>−1.0</td><td>−4.0</td><td><b>1.00</b></td></tr>
+<tr><td>Expected SARSA</td><td>0.05·2 + 0.85·5 + 0.05·1 + 0.05·0 = 4.4</td><td>2.96</td><td>−0.04</td><td><b>2.98</b></td></tr>
+</table>
+<p>The Expected SARSA future, 0.05·2 + 0.85·5 + 0.05·1 + 0.05·0, is a <b>dot product</b> π · Q(s′), the school maths you know. In the code it's literally <code>np.dot(policy_probs(Q, s2, eps), Q[s2])</code>.</p>
+<p><b>Q-learning</b> always assumes the best. <b>SARSA</b> usually agrees, but sometimes (when it explores) drops sharply, and on average it equals <b>Expected SARSA</b>, which gives that average every time, with no jumps. That's why Expected SARSA's curve is the smoothest in chapter 09.</p>
+
+<h3>Example 2: a real transition from the cliff (real output)</h3>
+<p>From SARSA's learned table. The agent is in row 2, col 0 (just above the start), steps <b>right</b> onto the cliff edge (row 2, col 1). r = −1, α = 0.5, γ = 1.</p>
+<pre>
+old Q[s, right] = −19.79
+Q[s′] = ↑ −18.23   → −24.19   ↓ −114.54   ← −20.96          (↓ from the edge = into the cliff)
+π(·|s′) = ↑ 0.925  → 0.025    ↓ 0.025     ← 0.025
+
+Q-learning (max)              future  −18.23   target  −19.23   δ  +0.56   new Q  −19.51
+SARSA, a′ = ↑ (greedy, 92.5%) future  −18.23   target  −19.23   δ  +0.56   new Q  −19.51
+SARSA, a′ = ↓ (explore, 2.5%) future −114.54   target −115.54   δ −95.75   new Q  −67.66
+Expected SARSA (average)      future  −20.86   target  −21.86   δ  −2.07   new Q  −20.82
+</pre>
+<p>Check the Expected SARSA future yourself: 0.925 × (−18.23) + 0.025 × (−24.19 − 114.54 − 20.96) = −16.86 − 3.99 = <b>−20.86</b>.</p>
+<div class="box key"><span class="tag">This is the whole cliff story in one table</span>
+<p>Q-learning sees the edge square through <code>max</code>: −18.23, "fine". SARSA and Expected SARSA <b>remember the 2.5% chance that I'll stumble down</b> (−114.54) and mark the edge as worse. Repeat this thousands of times and SARSA learns to keep away from the edge.</p>
+</div>
+
+<!-- ═══════════ 07 ═══════════ -->
+<h2><span class="n">07</span>The algorithm</h2>
+<p class="sub">SARSA's loop. Spot the one difference from project 3: the next action is chosen <i>before</i> the update.</p>
+
+<figure>
+<svg viewBox="0 0 760 240" role="img" aria-label="SARSA loop: choose a, step, choose a2, target, update, shift">
+  <defs><marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="220" height="60" rx="5" class="bx"/><text x="130" y="44" text-anchor="middle" font-weight="700">0 · before the loop</text><text x="130" y="64" text-anchor="middle" class="t-m">choose first a (ε-greedy)</text>
+  <line x1="240" y1="50" x2="268" y2="50" class="ln" marker-end="url(#a7)"/>
+  <rect x="270" y="20" width="220" height="60" rx="5" class="bx"/><text x="380" y="44" text-anchor="middle" font-weight="700">1 · ACT</text><text x="380" y="64" text-anchor="middle" class="t-m">env.step(a) → s2, r</text>
+  <line x1="490" y1="50" x2="518" y2="50" class="ln" marker-end="url(#a7)"/>
+  <rect x="520" y="20" width="220" height="60" rx="5" class="bxa"/><text x="630" y="44" text-anchor="middle" font-weight="700">2 · CHOOSE NEXT a2</text><text x="630" y="64" text-anchor="middle">ε-greedy in s2</text>
+  <line x1="630" y1="80" x2="630" y2="148" class="ln" marker-end="url(#a7)"/>
+  <rect x="520" y="150" width="220" height="60" rx="5" class="bxa"/><text x="630" y="174" text-anchor="middle" font-weight="700">3 · TARGET</text><text x="630" y="194" text-anchor="middle">r + γ · Q[s2, a2]</text>
+  <line x1="520" y1="180" x2="492" y2="180" class="ln" marker-end="url(#a7)"/>
+  <rect x="270" y="150" width="220" height="60" rx="5" class="bxg"/><text x="380" y="174" text-anchor="middle" font-weight="700">4 · UPDATE</text><text x="380" y="194" text-anchor="middle">Q[s,a] += α·(target − Q[s,a])</text>
+  <line x1="270" y1="180" x2="242" y2="180" class="ln" marker-end="url(#a7)"/>
+  <rect x="20" y="150" width="220" height="60" rx="5" class="bx"/><text x="130" y="174" text-anchor="middle" font-weight="700">5 · SHIFT</text><text x="130" y="194" text-anchor="middle">s, a = s2, a2</text>
+  <path d="M130,150 V118 H380 V82" class="ln" marker-end="url(#a7)"/><text x="255" y="112" text-anchor="middle" class="t-m">a2 is now really played</text>
+</svg>
+<figcaption>Q-learning chooses its next action at the top of the loop and uses max in the target; SARSA chooses it in step 2 and uses it in the target.</figcaption>
+</figure>
+
+<h3>Pseudocode: three methods, one loop</h3>
+<pre>
+Q = 0 everywhere
+for each game:
+    s = reset();  a = ε-greedy(Q, s)
+    until the game ends:
+        s2, r = step(a)
+        a2 = ε-greedy(Q, s2)
+        if   SARSA:           future = Q[s2, a2]
+        elif Expected SARSA:  future = Σ π(b|s2) · Q[s2, b]     (dot product)
+        elif Q-learning:      future = max Q[s2]
+        target = r + γ · future          (just r if the game ended)
+        Q[s, a] += α · (target − Q[s, a])
+        s, a = s2, a2
+</pre>
+
+<!-- ═══════════ 08 ═══════════ -->
+<h2><span class="n">08</span>The code, line by line</h2>
+<p class="sub"><code>td_agents.py</code>: all three methods in one file.</p>
+
+<h3>① The agent's own dice: <code>policy_probs</code></h3>
+<pre><span class="k">def</span> policy_probs(Q, s, eps):
+    n = Q.shape[1]
+    probs = np.full(n, eps / n)                       <span class="c"># every action: the explore share</span>
+    best = np.flatnonzero(Q[s] == Q[s].max())
+    probs[best] += (1 - eps) / len(best)              <span class="c"># best action(s): + the exploit share</span>
+    <span class="k">return</span> probs</pre>
+
+<h3>② The ONE line where the methods differ: <code>future_value</code></h3>
+<pre><span class="k">def</span> future_value(method, Q, s2, a2, eps):
+    <span class="k">if</span> method == <span class="c">"sarsa"</span>:
+        <span class="k">return</span> <span class="h">Q[s2, a2]</span>                              <span class="c"># what I will actually do next</span>
+    <span class="k">if</span> method == <span class="c">"expected_sarsa"</span>:
+        <span class="k">return</span> <span class="h">np.dot(policy_probs(Q, s2, eps), Q[s2])</span>  <span class="c"># average over my own dice</span>
+    <span class="k">if</span> method == <span class="c">"qlearning"</span>:
+        <span class="k">return</span> <span class="h">np.max(Q[s2])</span>                          <span class="c"># the best I could do next</span></pre>
+
+<h3>③ The training loop</h3>
+<pre><span class="k">for</span> ep <span class="k">in</span> range(episodes):
+    s, _ = env.reset()
+    a = epsilon_greedy(Q, s, eps, rng)            <span class="c"># SARSA needs the first action before the loop</span>
+    done = False
+    <span class="k">while not</span> done:
+        s2, r, terminated, truncated, _ = env.step(a)
+        a2 = epsilon_greedy(Q, s2, eps, rng)      <span class="c"># choose the NEXT action now</span>
+        target = r + gamma * future_value(method, Q, s2, a2, eps) * (<span class="k">not</span> terminated)
+        td_error = target - Q[s, a]               <span class="c"># the surprise, δ</span>
+        Q[s, a] += alpha * td_error               <span class="c"># update the state we LEFT</span>
+        s, a = s2, a2                             <span class="c"># the next action is already chosen</span>
+        done = terminated <span class="k">or</span> truncated</pre>
+
+<table>
+<tr><th style="width:30%">Line</th><th>Meaning</th></tr>
+<tr><td><code>a = epsilon_greedy(...)</code> before the loop</td><td>SARSA always holds "the action I'm about to take". It needs one before the first step.</td></tr>
+<tr><td><code>a2 = epsilon_greedy(Q, s2, …)</code></td><td>Choose the next move <b>now</b>, possibly a random explore move. All three methods do this, but only SARSA puts it in the target.</td></tr>
+<tr><td><code>future_value(...)</code></td><td>The only difference between the three methods.</td></tr>
+<tr><td><code>* (not terminated)</code></td><td>Reached the goal → no future → target = r. (Falling in the cliff does <i>not</i> end CliffWalking; it sends you back to S with −100.)</td></tr>
+<tr><td><code>Q[s, a] += alpha * td_error</code></td><td>Exactly project 3's nudge: the state you <b>left</b> is updated; s2 is only read.</td></tr>
+<tr><td><code>s, a = s2, a2</code></td><td>The chosen a2 is the action really played next. That's what makes SARSA "on-policy".</td></tr>
+</table>
+
+
+<!-- ═══════════ 09 ═══════════ -->
+<h2><span class="n">09</span>CliffWalking: careful vs bold</h2>
+<p class="sub">Real output of <code>python cliff_walking.py</code>: 500 training games, α = 0.5, ε = 0.1 fixed, γ = 1.</p>
+
+<pre>
+row 0   .  .  .  .  .  .  .  .  .  .  .  .
+row 1   .  .  .  .  .  .  .  .  .  .  .  .
+row 2   .  .  .  .  .  .  .  .  .  .  .  .        every step: −1
+row 3   S  C  C  C  C  C  C  C  C  C  C  G        C = cliff: −100 and back to S (game continues)
+</pre>
+<p>The shortest route walks right along the edge: 13 steps, reward −13. But with ε = 0.1, one move in ten is random, and a random "down" on the edge costs −100.</p>
+
+<figure><img style="max-width:118mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/01_sarsa_td/cliff_paths.png" alt="Greedy paths: SARSA top row 17 steps, Expected SARSA second row 15 steps, Q-learning cliff edge 13 steps"><figcaption>The greedy path each method learned (seed 0). SARSA keeps two rows away, Expected SARSA one row, Q-learning hugs the edge.</figcaption></figure>
+
+<h3>The numbers (one run each, seed 0)</h3>
+<table>
+<tr><th>Method</th><th class="n">Training: avg reward, last 100 games</th><th class="n">Cliff falls in 500 games</th><th class="n">Greedy test</th><th class="n">Test while still exploring (ε = 0.1)</th></tr>
+<tr><td>SARSA</td><td class="n">−26.2</td><td class="n">53</td><td class="n">−17 (17 steps)</td><td class="n">−21.9</td></tr>
+<tr><td>Expected SARSA</td><td class="n"><b>−22.4</b></td><td class="n"><b>38</b></td><td class="n">−15 (15 steps)</td><td class="n"><b>−21.2</b></td></tr>
+<tr><td>Q-learning</td><td class="n">−61.8</td><td class="n">179</td><td class="n"><b>−13 (13 steps)</b></td><td class="n">−48.8</td></tr>
+</table>
+
+<div class="box key"><span class="tag">Read the table carefully: both are "right"</span>
+<ul style="margin:0">
+<li><b>Greedy test (no exploring):</b> Q-learning wins (−13). It found the truly shortest path, the best plan <i>for a perfect player</i>.</li>
+<li><b>While exploring (how they actually lived during training):</b> Q-learning is far worse (−61.8 vs −22.4, and 179 falls vs 38). It walks the edge and keeps stumbling off.</li>
+<li>If your agent will <b>keep exploring</b> (or keeps making small mistakes) in real life, SARSA's answer is the useful one. If exploration stops after training, Q-learning's answer is better.</li>
+</ul>
+</div>
+
+<figure><img src="file:///D:/Langchain/rl_topics/01_sarsa_td/cliff_curves.png" alt="Training reward and cliff falls over 500 games, average of 50 runs"><figcaption>Average of 50 runs. Top: training reward; Q-learning settles near −50, SARSA near −27, Expected SARSA near −21. Bottom: cliff falls per game; Q-learning keeps falling about once every 3 games.</figcaption></figure>
+
+<h3>50 runs per method (the fair comparison)</h3>
+<table>
+<tr><th>Method</th><th class="n">Avg training reward (all 500 games)</th><th class="n">Games 401–500</th><th class="n">Cliff falls / game (401–500)</th><th>Greedy path over 50 runs</th></tr>
+<tr><td>SARSA</td><td class="n">−36.9</td><td class="n">−26.3</td><td class="n">0.044</td><td>17 steps × 40, 19 × 3, <b>loops × 7</b></td></tr>
+<tr><td>Expected SARSA</td><td class="n"><b>−28.1</b></td><td class="n"><b>−20.7</b></td><td class="n"><b>0.035</b></td><td>15 steps × 50</td></tr>
+<tr><td>Q-learning</td><td class="n">−55.4</td><td class="n">−49.3</td><td class="n">0.327</td><td>13 steps × 50</td></tr>
+</table>
+<div class="box warn"><span class="tag">An honest detail</span>
+<p>In 7 of 50 runs SARSA's greedy arrows walked in a circle and never reached G within 100 steps. With α = 0.5 and random a′ in the target, SARSA's values jump around (example 1: 3.25 or 1.00 for the same move), and some runs end on a messy table. Expected SARSA removes that randomness, and all 50 runs found the same safe 15-step path. Chapter 10 shows that lowering α also fixes SARSA.</p>
+</div>
+
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>Experiments: ε, α and n-step</h2>
+<p class="sub">Real output of <code>python experiments.py</code> (20 runs each) and part 3 of <code>td_prediction.py</code>.</p>
+
+<h3>Experiment 1: how clumsy is the explorer? (ε fixed)</h3>
+<table>
+<tr><th>ε</th><th>SARSA: training reward (last 100)</th><th>SARSA greedy path</th><th>Q-learning: training reward (last 100)</th><th>Q-learning path</th></tr>
+<tr><td>0.01</td><td class="n">−16.5</td><td>15 steps (14 of 20 runs)</td><td class="n">−15.7</td><td>13 × 20</td></tr>
+<tr><td>0.1</td><td class="n">−26.5</td><td>17 steps (16 of 20)</td><td class="n">−50.5</td><td>13 × 20</td></tr>
+<tr><td>0.2</td><td class="n">−41.4</td><td>17 steps (13 of 20)</td><td class="n"><b>−110.9</b></td><td>13 × 20</td></tr>
+</table>
+<p>The more you explore, the further SARSA moves from the edge, because it accounts for its own clumsiness. Q-learning always picks the edge, so its training reward collapses as ε grows (−110.9 at ε = 0.2).</p>
+<figure><img src="file:///D:/Langchain/rl_topics/01_sarsa_td/exp_eps_paths.png" alt="SARSA paths for epsilon 0.01, 0.1, 0.2" style="max-width:150mm"><figcaption>SARSA's greedy path for ε = 0.01 (one row from the edge), 0.1 and 0.2 (top row).</figcaption></figure>
+
+<h3>Experiment 2: stop exploring slowly (ε × 0.99 per game)</h3>
+<table>
+<tr><th>Method</th><th class="n">Training reward (last 100)</th><th>Greedy path (20 runs)</th></tr>
+<tr><td>SARSA</td><td class="n">−17.2</td><td>17 × 20</td></tr>
+<tr><td>Expected SARSA</td><td class="n">−15.0</td><td>15 × 19, 13 × 1</td></tr>
+<tr><td>Q-learning</td><td class="n"><b>−13.2</b></td><td>13 × 20</td></tr>
+</table>
+<p>When ε shrinks towards 0, exploration mistakes disappear and the edge becomes safe. Q-learning is now best. In theory, SARSA would also reach the edge path if ε went all the way to 0 and it trained long enough.</p>
+
+<h3>Experiment 3: step size α</h3>
+<figure><img src="file:///D:/Langchain/rl_topics/01_sarsa_td/exp_alpha.png" alt="Training reward per alpha for the three methods"><figcaption>Average training reward per game. SARSA collapses at α = 1.0 (−87.1, and 13 of 20 greedy paths loop). Expected SARSA is <b>fine even at α = 1.0</b> (−25.6), because its target has no randomness from a′.</figcaption></figure>
+
+<h3>Experiment 4: n-step TD, the dial between TD and Monte Carlo</h3>
+<p>Instead of 1 real reward + a guess, use <b>n</b> real rewards + a guess:</p>
+<pre>
+n = 1  (TD(0)):  G = r<sub>1</sub> + γ·V(s<sub>1</sub>)
+n = 2:          G = r<sub>1</sub> + γ·r<sub>2</sub> + γ²·V(s<sub>2</sub>)
+n = 4:          G = r<sub>1</sub> + γ·r<sub>2</sub> + γ²·r<sub>3</sub> + γ³·r<sub>4</sub> + γ⁴·V(s<sub>4</sub>)
+n = ∞ (MC):     G = r<sub>1</sub> + γ·r<sub>2</sub> + γ²·r<sub>3</sub> + …    (no guess at all, wait for the end)
+</pre>
+<div class="two">
+<div><figure style="margin:0"><img src="file:///D:/Langchain/rl_topics/01_sarsa_td/nstep.png" alt="n-step TD error versus alpha"></figure></div>
+<div>
+<table>
+<tr><th>n</th><th class="n">best α</th><th class="n">error (first 10 games)</th></tr>
+<tr><td>1</td><td class="n">0.8</td><td class="n">0.346</td></tr>
+<tr><td>2</td><td class="n">0.6</td><td class="n">0.281</td></tr>
+<tr><td><b>4</b></td><td class="n">0.4</td><td class="n"><b>0.271</b></td></tr>
+<tr><td>8</td><td class="n">0.2</td><td class="n">0.283</td></tr>
+<tr><td>16</td><td class="n">0.1</td><td class="n">0.322</td></tr>
+<tr><td>MC</td><td class="n">0.02</td><td class="n">0.479</td></tr>
+</table>
+</div>
+</div>
+<p>On a 19-square walk, a <b>middle n</b> (4) wins: enough real rewards to reduce the bias of guesses, few enough to keep the noise down. This dial idea (called TD(λ) when you blend all n) comes back in PPO's GAE in booklet 06.</p>
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>Real-world problems</h2>
+<p class="sub">When does "learn about how I really behave" matter? When mistakes during learning cost something real.</p>
+
+<div class="box plain"><span class="tag">Rule of thumb</span>
+<p>Use <b>SARSA / Expected SARSA</b> when the agent learns <b>while acting for real</b> and keeps exploring or keeps making small errors. Use <b>Q-learning</b> when learning happens in a <b>safe simulator</b>, or from logged data, and the final agent won't explore.</p>
+</div>
+
+<h3>1 · A warehouse robot near a loading dock</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>robot's grid cell, whether it carries a box, battery level (discretised)</td></tr>
+<tr><td><b>Action</b></td><td>up / down / left / right / pick / drop</td></tr>
+<tr><td><b>Reward</b></td><td>−1 per move, +20 per delivered box, −200 for driving off the dock edge (damage)</td></tr>
+<tr><td><b>Episode</b></td><td>one delivery shift</td></tr>
+<tr><td><b>Why SARSA</b></td><td>Its wheels slip and its sensors are noisy, so it never moves perfectly. Like the cliff, SARSA learns to keep a margin from the dock edge. Q-learning would plan the edge-hugging route for a perfect robot that doesn't exist.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Real crashes during learning are expensive: start in simulation, then fine-tune on the real robot with small ε.</td></tr>
+</table>
+
+<h3>2 · A thermostat learning in a real office building</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>room temperature band, outside temperature band, hour of day, occupancy</td></tr>
+<tr><td><b>Action</b></td><td>heater/AC setting: off / low / medium / high</td></tr>
+<tr><td><b>Reward</b></td><td>−(energy cost) − 10 × (degrees outside the comfort band)</td></tr>
+<tr><td><b>Episode</b></td><td>one day</td></tr>
+<tr><td><b>Why Expected SARSA</b></td><td>It must keep exploring a little to adapt to the seasons, and every exploratory action is felt by real people. Expected SARSA learns safe settings that remain comfortable even when it explores, and it's stable with a larger α.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Discretising temperature too coarsely hides important states. Too finely and the Q-table becomes huge (booklet 03, DQN, solves that).</td></tr>
+</table>
+
+<h3>3 · A beginner trading bot with real money</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>price trend (down / flat / up), current position (none / holding), time to market close</td></tr>
+<tr><td><b>Action</b></td><td>buy / hold / sell</td></tr>
+<tr><td><b>Reward</b></td><td>profit or loss of each step; large penalty if the loss for the day exceeds a limit</td></tr>
+<tr><td><b>Why on-policy</b></td><td>The bot keeps making exploratory trades, and those trades lose real money. SARSA prices in its own exploration and avoids strategies that are only good for a perfect trader.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Markets change (the "rules" drift) and are very noisy. In practice you would first learn offline from historical data, which is an off-policy setting, so a Q-learning-style method fits there. Treat any trading example as a learning exercise, not advice.</td></tr>
+</table>
+
+<h3>4 · Learning from a driving simulator vs from a log of human drivers</h3>
+<p>If you only have <b>recorded data</b> of other drivers (you can't choose actions), you need an <b>off-policy</b> method: Q-learning's max doesn't care which action was taken next, so it can learn from anyone's experience. SARSA needs the next action from <i>its own</i> policy, so it can't use other people's logs directly. That's the practical side of on-policy vs off-policy.</p>
+
+<!-- ═══════════ 12 ═══════════ -->
+<h2><span class="n">12</span>Side by side</h2>
+<p class="sub">All the TD-family methods you now know, plus Monte Carlo for reference.</p>
+
+<table class="long">
+<tr><th style="width:18%"></th><th>Monte Carlo</th><th>TD(0)</th><th>SARSA</th><th>Expected SARSA</th><th>Q-learning</th></tr>
+<tr><td>Learns</td><td>V or Q</td><td>V</td><td>Q</td><td>Q</td><td>Q</td></tr>
+<tr><td>Target's future part</td><td>none: real total G</td><td>V(s′)</td><td>Q(s′, a′)</td><td>Σ π·Q(s′,·)</td><td>max Q(s′,·)</td></tr>
+<tr><td>Updates when</td><td>game ends</td><td>every step</td><td>every step</td><td>every step</td><td>every step</td></tr>
+<tr><td>On / off-policy</td><td>on (basic form)</td><td>prediction</td><td><b>on</b></td><td><b>on</b> (usual form)</td><td><b>off</b></td></tr>
+<tr><td>Noise in the target</td><td>high</td><td>low</td><td>medium (random a′)</td><td><b>lowest</b></td><td>low</td></tr>
+<tr><td>Cliff training reward</td><td>—</td><td>—</td><td>−36.9</td><td><b>−28.1</b></td><td>−55.4</td></tr>
+<tr><td>Cliff greedy path</td><td>—</td><td>—</td><td>17 (safe)</td><td>15 (safe)</td><td><b>13 (shortest)</b></td></tr>
+<tr><td>Can learn from others' data</td><td>with corrections</td><td>—</td><td>no</td><td>yes, if π is your target policy</td><td><b>yes</b></td></tr>
+<tr><td>Cost per update</td><td>cheap</td><td>cheap</td><td>cheapest</td><td>a dot product over actions</td><td>a max over actions</td></tr>
+<tr><td>Best when</td><td>episodes are short, guesses unreliable</td><td>evaluating a fixed behaviour</td><td>learning live, mistakes cost</td><td>like SARSA, but want stability</td><td>simulator or logs, final agent won't explore</td></tr>
+</table>
+
+<div class="box key"><span class="tag">Remember</span>
+<p>All five are the same recipe, "move the old guess a bit toward a target". They differ only in <b>what the target is</b>: the real total (MC), one step plus your next action's value (SARSA), the average (Expected SARSA), or the best (Q-learning).</p>
+</div>
+
+<!-- ═══════════ 13 ═══════════ -->
+<h2><span class="n">13</span>Clearing up the confusions</h2>
+<p class="sub">Short, correct answers to the questions beginners ask most.</p>
+
+<div class="qa"><div class="q">Is Q-learning a TD method?</div><p><b>Yes.</b> Anything that updates after each step using its own guess of the next state is TD. Q-learning, SARSA and TD(0) are all TD methods.</p></div>
+<div class="qa"><div class="q">What does "temporal difference" actually mean?</div><p>The difference between two guesses made at different times: Q(s,a) now, and r + γ·(guess at s′) one step later. That difference is δ.</p></div>
+<div class="qa"><div class="q">Which state does SARSA update?</div><p>The state you <b>left</b>, for the action you took: <code>Q[s, a]</code>. s2 and a2 are only <b>read</b>, exactly as in project 3.</p></div>
+<div class="qa"><div class="q">Does SARSA take a2 twice: once in the target and once for real?</div><p>No. It chooses a2 once, uses its Q-value in the target, and then really plays that same a2 on the next step (<code>s, a = s2, a2</code>).</p></div>
+<div class="qa"><div class="q">Does SARSA know the cliff probabilities?</div><p>No. CliffWalking's rules are hidden, as in FrozenLake. The only probabilities SARSA "knows" are its own ε-greedy choices, and plain SARSA doesn't even compute those; it just uses the a2 it rolled.</p></div>
+<div class="qa"><div class="q">Then why does SARSA avoid the cliff if nobody told it about stumbling?</div><p>Because sometimes its a2 really is a random "down" on the edge, and that −114 value goes into the target. Over thousands of updates, the edge squares' values absorb that risk.</p></div>
+<div class="qa"><div class="q">Q-learning also explores. Why doesn't it learn the danger?</div><p>It does fall in during training (179 times!), and the "step down" Q-value becomes very negative. But its target uses <b>max</b>, which never picks that bad action, so the edge squares themselves still look fine.</p></div>
+<div class="qa"><div class="q">So is Q-learning wrong on the cliff?</div><p>No. It correctly learned the best path for a player who doesn't explore (greedy test −13, the best possible). It's "wrong" only for the agent that keeps exploring.</p></div>
+<div class="qa"><div class="q">If ε goes to 0, are SARSA and Q-learning the same?</div><p>With ε = 0, a2 is always the greedy action, so Q[s2, a2] = max Q[s2] and the updates become identical. Experiment 2 shows them getting close as ε shrinks.</p></div>
+<div class="qa"><div class="q">Why is Expected SARSA better than SARSA here?</div><p>Same average target, but no randomness from which a2 was rolled. Less noise → smoother learning, works even with α = 1.0. It costs one small dot product per step.</p></div>
+<div class="qa"><div class="q">Why was SARSA's greedy path a loop in 7 runs?</div><p>Its values were still jumpy (α = 0.5 + random a2). With the arrows read greedily, some squares pointed at each other. Lower α (0.1) or Expected SARSA fixes it.</p></div>
+<div class="qa"><div class="q">Is TD always better than Monte Carlo?</div><p>No. TD has lower noise but starts biased by wrong guesses. On the random walk TD won; in some problems (e.g. when the state description is incomplete) MC can be better. n-step methods sit in between, and a middle n often wins.</p></div>
+<div class="qa"><div class="q">What do γ = 1 and "the cliff doesn't end the game" change?</div><p>γ = 1: future steps count fully (fine, because every game eventually reaches G). Falling sends you back to S with −100 but the game continues, so <code>terminated</code> is only true at G.</p></div>
+
+<!-- ═══════════ 14 ═══════════ -->
+<h2><span class="n">14</span>Practice problems</h2>
+<p class="sub">Try them before looking at chapter 16.</p>
+
+<ol>
+<li><b>TD(0) by hand.</b> V(B) = 0.4, V(C) = 0.6, α = 0.1, γ = 1. You move B → C with r = 0. What is δ and the new V(B)?</li>
+<li><b>Terminal step.</b> V(E) = 0.7. You step from E off the right end and get r = +1. α = 0.1. New V(E)?</li>
+<li><b>ε-greedy probabilities.</b> 4 actions, ε = 0.3, a single best action. Write π for all four actions and check they sum to 1.</li>
+<li><b>Three targets.</b> Q(s′) = [−2, 4, 6, 0], ε = 0.2, r = −1, γ = 1. Compute the future part for Q-learning, for SARSA if a′ = action 0, and for Expected SARSA.</li>
+<li><b>Update.</b> In problem 4, the old Q(s, a) = 3 and α = 0.5. Compute the new Q(s, a) for all three cases.</li>
+<li><b>Monte Carlo vs TD.</b> A game visits B, C, D and ends with total reward 1 (γ = 1). All V start at 0.5, α = 0.1. Give the MC updates for B, C, D. Then give the TD(0) updates in step order, assuming the only reward (+1) comes on the last step out of D.</li>
+<li><b>n-step target.</b> γ = 0.9, rewards r<sub>1</sub> = 0, r<sub>2</sub> = 0, r<sub>3</sub> = 1, and V(s<sub>2</sub>) = 0.5. Compute the 2-step target.</li>
+<li><b>Conceptual.</b> You have a log of 10,000 games played by a human. Can you train SARSA on it directly? Q-learning? Explain.</li>
+<li><b>Conceptual.</b> A self-driving car will keep exploring a little forever (ε = 0.05). Which method's values better describe the risks it will really face? Why?</li>
+<li><b>Coding.</b> In <code>td_agents.py</code>, add a method <code>"greedy_sarsa"</code> whose future is Q[s2, a2] but where a2 is always greedy. Which existing method does it equal? Run <code>cliff_walking.py</code> to check.</li>
+<li><b>Coding.</b> Change CliffWalking's ε to 0.05 in <code>SETTINGS</code>. Predict SARSA's greedy path length before running.</li>
+</ol>
+
+<!-- ═══════════ 15 ═══════════ -->
+<h2><span class="n">15</span>Run it yourself + cheat sheet</h2>
+
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\01_sarsa_td
+python td_prediction.py        <span class="c"># TD(0) vs Monte Carlo on the random walk + n-step   (~1 min)</span>
+python cliff_walking.py        <span class="c"># SARSA vs Expected SARSA vs Q-learning on the cliff  (~1 min)</span>
+python experiments.py          <span class="c"># ε, decaying ε and α experiments                     (~1–2 min)</span>
+<span class="c"># add --no-show to save the charts without opening windows</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">SARSA</span>
+<pre style="background:#fff;margin:6px 0">Q = 0
+for each game:
+  s = reset(); a = ε-greedy(s)
+  until done:
+    s2, r = step(a)
+    a2 = ε-greedy(s2)
+    target = r + γ·Q[s2,a2]
+    Q[s,a] += α(target − Q[s,a])
+    s, a = s2, a2</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">The only line that changes</span>
+<pre style="background:#fff;margin:6px 0">SARSA:          Q[s2, a2]
+Expected SARSA: Σ π(b|s2)·Q[s2,b]
+Q-learning:     max Q[s2]
+TD(0) (for V):  V(s2)
+Monte Carlo:    (no guess) real G</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>TD methods update after every step using their own guess of the next state; Q-learning is one of them.</li>
+<li>SARSA's target uses the action you <b>will really take</b>; Q-learning's uses the <b>best</b> action. That is on-policy vs off-policy.</li>
+<li>On the cliff, SARSA learns a safe path for a clumsy explorer; Q-learning learns the shortest path for a perfect player.</li>
+<li>Expected SARSA averages over your own action probabilities (a dot product), giving SARSA's caution with much less noise.</li>
+</ol>
+</div>
+
+<!-- ═══════════ 16 ═══════════ -->
+<h2><span class="n">16</span>Answers</h2>
+
+<ol>
+<li>target = 0 + 1 × 0.6 = 0.6; δ = 0.6 − 0.4 = <b>+0.2</b>; V(B) = 0.4 + 0.1 × 0.2 = <b>0.42</b>.</li>
+<li>The end has no future: target = 1; δ = 1 − 0.7 = 0.3; V(E) = 0.7 + 0.03 = <b>0.73</b>.</li>
+<li>Explore share ε/4 = 0.075 each; best gets 0.7 + 0.075 = <b>0.775</b>; others <b>0.075</b>. Sum = 0.775 + 3 × 0.075 = 1 ✓.</li>
+<li>π = [0.05, 0.05, 0.85, 0.05] (best is action 2, value 6). Q-learning: max = <b>6</b>. SARSA with a′ = 0: <b>−2</b>. Expected: 0.05·(−2) + 0.05·4 + 0.85·6 + 0.05·0 = −0.1 + 0.2 + 5.1 + 0 = <b>5.2</b>.</li>
+<li>Targets: −1 + 6 = 5; −1 + (−2) = −3; −1 + 5.2 = 4.2. New Q = 3 + 0.5·(target − 3): Q-learning <b>4.0</b>; SARSA <b>0.0</b>; Expected SARSA <b>3.6</b>.</li>
+<li>MC: G = 1 for every visited state: B, C, D each 0.5 + 0.1·(1 − 0.5) = <b>0.55</b>. TD: B→C: target 0 + 0.5 = 0.5, δ = 0 → B stays 0.5; C→D: same → C stays 0.5; D→end with r = 1: target 1, δ = 0.5 → D = <b>0.55</b>. Only D learned, and the news reaches B and C in later games.</li>
+<li>2-step target = r<sub>1</sub> + γ·r<sub>2</sub> + γ²·V(s<sub>2</sub>) = 0 + 0 + 0.81 × 0.5 = <b>0.405</b>. (r<sub>3</sub> is not used: only 2 real rewards.)</li>
+<li>SARSA: <b>not directly</b>. Its target needs a′ from its <i>own</i> policy, and the log contains the human's next actions instead. Q-learning: <b>yes</b>. Its target uses max Q[s2], which doesn't depend on which action the human took next.</li>
+<li><b>SARSA / Expected SARSA</b>: their values include the 5% exploratory actions the car will actually take, so risky states near hazards get correctly lower values. Q-learning's values assume a perfect driver.</li>
+<li>With a greedy a2, Q[s2, a2] = max Q[s2], so it equals <b>Q-learning's</b> target (as long as exploration only affects the action actually played). Its paths should hug the edge like Q-learning.</li>
+<li>A sensible prediction: with less clumsiness the edge is less dangerous, so SARSA moves closer, probably the 15-step path one row up (experiment 1 found 15 steps at ε = 0.01). Run it to see what your seed gives.</li>
+</ol>
+
+</main>
+</body>
+</html>

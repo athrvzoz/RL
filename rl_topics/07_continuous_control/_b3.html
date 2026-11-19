@@ -1,0 +1,206 @@
+
+<!-- ═══════════ 09 ═══════════ -->
+<h2><span class="n">09</span>The code, line by line</h2>
+<p class="sub"><code>common.py</code> (the shared loop), <code>ddpg_td3.py</code> and <code>sac.py</code>.</p>
+
+<h3>① The shared play-and-learn loop (<code>common.train</code>)</h3>
+<pre><span class="k">for</span> t <span class="k">in</span> range(1, total_steps + 1):
+    <span class="k">if</span> t &lt;= start_steps:
+        a = env.action_space.sample()               <span class="c"># warm-up: 1,000 random torques</span>
+    <span class="k">else</span>:
+        a = agent.act(s, explore=True)              <span class="c"># actor's torque (+ noise for DDPG/TD3)</span>
+    s2, r, terminated, truncated, _ = env.step(a)
+    buf.add(s, a, r, s2, float(terminated))         <span class="c"># NOT truncated: a time limit isn't an end</span>
+    ...
+    <span class="k">if</span> t &gt; start_steps:
+        agent.update(*buf.sample(batch))            <span class="c"># learn from 128 random old moves</span></pre>
+
+<h3>② DDPG / TD3: the critic (exactly DQN's target, with the actor in place of max)</h3>
+<pre><span class="k">with</span> torch.no_grad():
+    a2 = self.mu(self.actor_t, s2)                         <span class="c"># target actor's torque in s2</span>
+    <span class="k">if</span> self.td3:                                           <span class="c"># TD3 fix 3: smoothing</span>
+        eps = (torch.randn_like(a2) * self.target_noise * self.max_action)
+        eps = eps.clamp(-self.noise_clip * self.max_action, self.noise_clip * self.max_action)
+        a2 = (a2 + eps).clamp(-self.max_action, self.max_action)
+    q2 = self.critic1_t(torch.cat([s2, a2], 1))
+    <span class="k">if</span> self.td3:                                           <span class="c"># TD3 fix 1: min of twins</span>
+        q2 = torch.min(q2, self.critic2_t(torch.cat([s2, a2], 1)))
+    target = <span class="h">r + self.gamma * (1 - done) * q2</span>              <span class="c"># Bellman: r + γ·Q(s2, a2)</span>
+critic_loss = F.mse_loss(self.critic1(torch.cat([s, a], 1)), target)</pre>
+
+<h3>③ DDPG / TD3: the actor climbs the critic's hill</h3>
+<pre><span class="k">if</span> self.td3 <span class="k">and</span> self.updates % self.policy_delay != 0:     <span class="c"># TD3 fix 2: delayed actor</span>
+    <span class="k">return</span>
+actor_loss = <span class="h">-self.critic1(torch.cat([s, self.mu(self.actor, s)], 1)).mean()</span>
+self.actor_opt.zero_grad(); actor_loss.backward(); self.actor_opt.step()
+soft_update(self.actor_t, self.actor, self.tau)            <span class="c"># targets creep 0.5% per update</span></pre>
+
+<h3>④ SAC: the reparameterised, squashed sample</h3>
+<pre>mean, log_std = self.actor(s).chunk(2, dim=-1)          <span class="c"># the actor outputs TWO numbers</span>
+std = log_std.clamp(-5, 2).exp()
+eps = torch.randn_like(mean)                           <span class="c"># the dice roll, outside the network</span>
+u = mean + std * eps                                   <span class="c"># differentiable in mean and std</span>
+a = torch.tanh(u)                                      <span class="c"># squash into (−1, 1), then × 2</span>
+log_prob = (-0.5 * eps**2 - log_std - 0.5 * math.log(2 * math.pi)).sum(-1, keepdim=True)
+log_prob = log_prob - torch.log(1 - a**2 + 1e-6).sum(-1, keepdim=True)   <span class="c"># squash correction</span></pre>
+
+<h3>⑤ SAC: soft target, curious actor, self-tuning α</h3>
+<pre>a2, logp2, _ = self.sample(s2)                         <span class="c"># a FRESH sample from the current actor</span>
+q2 = torch.min(self.critic1_t(...s2, a2...), self.critic2_t(...s2, a2...))
+target = <span class="h">r + self.gamma * (1 - done) * (q2 - alpha * logp2)</span>     <span class="c"># + curiosity bonus</span>
+...
+actor_loss = <span class="h">(alpha * logp - q_new).mean()</span>             <span class="c"># maximise  Q − α·log π</span>
+alpha_loss = -(self.log_alpha * (logp.detach() + self.target_entropy)).mean()</pre>
+
+<table>
+<tr><th style="width:32%">Line</th><th>Meaning</th></tr>
+<tr><td><code>buf.add(…, float(terminated))</code></td><td>Pendulum never really "ends"; its 200-step limit is a time-out, so the future always counts. Same lesson as A2C and PPO.</td></tr>
+<tr><td><code>self.mu(self.actor_t, s2)</code></td><td>Where DQN wrote <code>max Q(s2)</code>, DDPG asks the target actor for "the best torque" in s2.</td></tr>
+<tr><td><code>-self.critic1(…μ(s)…)</code></td><td>Maximising Q by minimising −Q. backward() applies ∂Q/∂a · ∂a/∂θ. Only the actor's optimiser steps, so the critic is not changed by this loss.</td></tr>
+<tr><td><code>soft_update(…, tau)</code></td><td>Polyak: target ← (1 − τ)·target + τ·online, every update, instead of DQN's copy every 500 steps.</td></tr>
+<tr><td><code>u = mean + std * eps</code></td><td>The reparameterisation trick: randomness comes from ε, so gradients flow into mean and std.</td></tr>
+<tr><td><code>q2 - alpha * logp2</code></td><td>The soft Bellman target: future value + a bonus for being random (−log π is large when π is spread out).</td></tr>
+<tr><td><code>target_entropy = −1</code></td><td>"Keep about this much randomness." α rises when the actor becomes too certain, and falls when it's random enough.</td></tr>
+</table>
+
+<!--RESULTS-->
+
+<!-- ═══════════ 13 ═══════════ -->
+<h2><span class="n">13</span>Real-world problems</h2>
+<div class="box plain"><span class="tag">When these methods fit</span>
+<p>✔ The action is one or more <b>real numbers</b> (torques, angles, speeds, amounts). ✔ Data is expensive: these are <b>off-policy</b> methods with a replay buffer, so every experience is reused many times. ✔ A simulator exists for safe practice. ✘ Very fast simulators with many parallel copies often favour PPO instead; discrete actions favour DQN.</p>
+</div>
+
+<h3>1 · A robot learning to walk (well documented)</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>joint angles and speeds, body tilt, foot contact sensors (~20–40 numbers)</td></tr>
+<tr><td><b>Action</b></td><td>a target torque for each of 8–12 motors: 8–12 real numbers at once</td></tr>
+<tr><td><b>Reward</b></td><td>+forward speed − energy used − large penalty for falling</td></tr>
+<tr><td><b>Why SAC</b></td><td>Discretising 12 motors × 41 levels = 41<sup>12</sup> actions (impossible for DQN). SAC is sample-efficient (replay) and its entropy bonus keeps exploring gaits. The SAC authors reported a real four-legged robot learning to walk in about two hours of real-world experience.</td></tr>
+<tr><td><b>Pitfalls</b></td><td>Falling damages hardware: use safety limits and a human with a stop button. The sim-to-real gap: a policy perfect in simulation may fail on real motors, so add noise to the simulator ("domain randomisation").</td></tr>
+</table>
+
+<h3>2 · A drone holding its position in the wind</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>position error, velocity, tilt angles, angular speeds, battery</td></tr>
+<tr><td><b>Action</b></td><td>4 motor thrusts (continuous)</td></tr>
+<tr><td><b>Reward</b></td><td>−(distance from target point)² − 0.01·(thrust changes)² (smoothness)</td></tr>
+<tr><td><b>Why TD3 / SAC</b></td><td>Continuous, coupled actions; train in a simulator with random wind, then test carefully. Research groups have trained drone controllers this way ("could be used for").</td></tr>
+</table>
+
+<h3>3 · Office temperature control with a continuous valve</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>room and outside temperature, time of day, occupancy, energy price</td></tr>
+<tr><td><b>Action</b></td><td>valve opening 0–100% and fan speed: two real numbers</td></tr>
+<tr><td><b>Reward</b></td><td>−energy cost − 10 × (degrees outside the comfort band)</td></tr>
+<tr><td><b>Why</b></td><td>The SARSA booklet discretised this into 4 settings; a continuous controller can make fine adjustments. Off-policy learning can reuse months of logged building data.</td></tr>
+<tr><td><b>Pitfall</b></td><td>Learned controllers can do odd things in rare states (like our DDPG's ±2 rattle near the top). Keep a simple safe fallback rule.</td></tr>
+</table>
+
+<!-- ═══════════ 14 ═══════════ -->
+<h2><span class="n">14</span>Side by side: DQN, PPO, DDPG, TD3, SAC</h2>
+<table class="long">
+<tr><th style="width:18%"></th><th>DQN</th><th>PPO</th><th>DDPG</th><th>TD3</th><th>SAC</th></tr>
+<tr><td>Actions</td><td>discrete only</td><td>both</td><td>continuous</td><td>continuous</td><td>continuous</td></tr>
+<tr><td>Policy</td><td>argmax Q</td><td>stochastic (dice)</td><td>deterministic μ(s) + noise</td><td>deterministic + noise</td><td><b>stochastic</b> (squashed Gaussian)</td></tr>
+<tr><td>On / off-policy</td><td>off</td><td>on</td><td>off</td><td>off</td><td>off</td></tr>
+<tr><td>Replay buffer</td><td>yes</td><td>no</td><td>yes</td><td>yes</td><td>yes</td></tr>
+<tr><td>Critics</td><td>1 Q-net</td><td>1 V-net</td><td>1 Q-net</td><td><b>2</b> (take min)</td><td><b>2</b> (take min)</td></tr>
+<tr><td>Target networks</td><td>hard copy every N</td><td>none</td><td>soft (τ)</td><td>soft (τ)</td><td>soft (τ), critics only</td></tr>
+<tr><td>Exploration</td><td>ε-greedy</td><td>its own dice + entropy</td><td>added noise</td><td>added noise</td><td><b>entropy bonus, self-tuned α</b></td></tr>
+<tr><td>Over-estimation fix</td><td>(Double DQN)</td><td>—</td><td>none</td><td>min of twins</td><td>min of twins</td></tr>
+<tr><td>Our Pendulum result</td><td>—</td><td>booklet 06</td><td colspan="3">all three learned to swing up within about 5,000–8,000 steps (chapter 10)</td></tr>
+<tr><td>Strength</td><td>simple</td><td>stable, easy to scale</td><td>simple</td><td>robust</td><td>robust, explores well, usual default</td></tr>
+</table>
+
+<!-- ═══════════ 15 ═══════════ -->
+<h2><span class="n">15</span>Clearing up the confusions</h2>
+<div class="qa"><div class="q">What does the DDPG actor output: a probability or an action?</div><p>An <b>action</b>: one torque number (deterministic). Exploration noise is added outside the network. SAC's actor outputs a bell curve (mean and σ) and samples from it.</p></div>
+<div class="qa"><div class="q">Is the critic's Q the same as DQN's Q?</div><p>Same meaning, but with the action as an <b>input</b> instead of one output per action: Q(s, a) takes 3 state numbers + 1 torque and returns one number.</p></div>
+<div class="qa"><div class="q">Where did "max over actions" go?</div><p>Into the actor. μ(s) is trained to output the torque that maximises Q(s, ·), so the target uses Q(s2, μ<sub>target</sub>(s2)) instead of max.</p></div>
+<div class="qa"><div class="q">Why does the actor need the critic's gradient ∂Q/∂a?</div><p>The world gives no gradient (we can't differentiate a pendulum). The critic is a smooth, differentiable stand-in: its slope says "a slightly bigger torque would be better", and the chain rule passes that into the actor's weights.</p></div>
+<div class="qa"><div class="q">Which state is updated?</div><p>As always: the states in the sampled batch (the states you left). s2 is only read to build the target. The actor is updated at the states s, never at s2.</p></div>
+<div class="qa"><div class="q">Why two critics and the smaller one?</div><p>Each critic makes noisy errors; the actor actively seeks torques where the critic is too optimistic. Taking the min of two independent critics cancels most of that optimism (simulation: +1.54 error with one critic vs −0.05 with the min).</p></div>
+<div class="qa"><div class="q">Is SAC's "entropy" the same as in A2C/PPO?</div><p>Same idea, "how spread out is the policy". But SAC puts it <b>inside the reward</b> (the soft Bellman target), and tunes its weight α automatically.</p></div>
+<div class="qa"><div class="q">Why tanh?</div><p>The motor only accepts torques in [−2, 2]. tanh squeezes any number into (−1, 1), × 2 gives a legal torque, and it's smooth, so gradients still flow.</p></div>
+<div class="qa"><div class="q">Why does the DDPG pendulum "rattle" at the top?</div><p>Its policy map has a sharp border near upright, so tiny angle changes flip the torque between +2 and −2. It still balances (the average torque is about 0), but it's not smooth. SAC's smoother policy holds still. Nobody rewarded smoothness, so the agent didn't care.</p></div>
+<div class="qa"><div class="q">Is the critic's estimate of the start state correct?</div><p>By the end, roughly: about −75 to −98 vs a real −87. Early on it was badly wrong (0 vs −455), because a critic learns from bootstrapped targets, which start out wrong.</p></div>
+<div class="qa"><div class="q">Why are these called off-policy if the actor keeps changing?</div><p>The critic's target only needs (s, a, r, s2) from the world, plus the current actor's choice at s2. Old moves from older actors are still valid evidence about the world, which is why replay works.</p></div>
+
+<!-- ═══════════ 16 ═══════════ -->
+<h2><span class="n">16</span>Practice problems</h2>
+<ol>
+<li><b>Counting actions.</b> A robot arm has 4 joints; you discretise each torque into 21 levels. How many discrete actions would DQN need?</li>
+<li><b>Polyak.</b> τ = 0.1, target weight 1.0, online weight 2.0 (fixed). Target after 1, 2 and 3 updates?</li>
+<li><b>DDPG target.</b> r = −2, γ = 0.99, Q<sub>target</sub>(s2, μ<sub>target</sub>(s2)) = −40, not terminated. Target? If Q(s, a) = −38, what is the squared error?</li>
+<li><b>Chain rule.</b> Toy critic Q(a) = −(a − 1)², actor a = θ. At θ = 0.2: compute ∂Q/∂a, ∂a/∂θ and the new θ with learning rate 0.1.</li>
+<li><b>tanh actor.</b> a = 2·tanh(θ), θ = 0. What torque? What is ∂a/∂θ there? (tanh′(x) = 1 − tanh²(x))</li>
+<li><b>Twin critics.</b> Q1(s2, a2) = −12, Q2(s2, a2) = −15, r = −1, γ = 0.9. TD3 target?</li>
+<li><b>Smoothing.</b> μ<sub>target</sub>(s2) = 1.8, noise drawn = +0.6, noise clip ±0.5, torque limit ±2. Final a2?</li>
+<li><b>Reparameterisation.</b> mean = −0.2, σ = 0.5, ε = 1.0. u = ? torque = 2·tanh(u) ≈ ? (tanh(0.3) ≈ 0.291)</li>
+<li><b>Soft target.</b> r = −1, min Q′ = −20, α = 0.1, log π(a2|s2) = −1.0, γ = 0.99. SAC target?</li>
+<li><b>Entropy of a bell curve.</b> H = ½·ln(2πe·σ²). Which σ gives H = 0? (2πe ≈ 17.08)</li>
+<li><b>Conceptual.</b> Why would PPO struggle more than SAC if each real-world trial costs ₹1,000?</li>
+<li><b>Coding.</b> Run <code>python knobs.py --part noise</code> and look at σ = 0: why can DDPG still learn without exploration noise here?</li>
+</ol>
+
+<!-- ═══════════ 17 ═══════════ -->
+<h2><span class="n">17</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\07_continuous_control
+python hand_examples.py          <span class="c"># all the hand-sized maths: Polyak, chain rule, min, tanh, SAC    (s)</span>
+python pendulum_experiment.py    <span class="c"># train DDPG, TD3, SAC on Pendulum (15,000 steps each)         (~6 min)</span>
+python peek_inside.py            <span class="c"># look inside the saved networks; SAC's α over time             (s)</span>
+python eval100.py                <span class="c"># 100-game exam of the saved agents                             (~1 min)</span>
+python knobs.py --part noise     <span class="c"># also: --part tau, --part alpha, --part seeds                  (2-5 min)</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">DDPG / TD3 in 9 lines</span>
+<pre style="background:#fff;margin:6px 0">a = μ(s) + noise;  store (s,a,r,s2)
+batch = 128 random stored moves
+a2 = μ_t(s2)  (+clipped noise: TD3)
+y = r + γ·Q_t(s2,a2)  (min of 2: TD3)
+critic(s): fit Q(s,a) → y
+(TD3: every 2nd update only)
+actor: maximise Q(s, μ(s))
+targets ← (1−τ)·targets + τ·online</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">SAC in 8 lines</span>
+<pre style="background:#fff;margin:6px 0">a = 2·tanh(mean + σ·ε), ε ~ N(0,1)
+batch = 128 random stored moves
+a2, logp2 = sample(s2)
+y = r + γ·(min Q_t(s2,a2) − α·logp2)
+both critics: fit Q(s,a) → y
+actor: maximise min Q(s,a~) − α·log π
+α: up if too sure, down if too random
+critic targets ← Polyak(τ)</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>With continuous actions you can't take a max over all actions, so an <b>actor</b> learns to output the best action and is trained by climbing the critic's slope (chain rule: ∂Q/∂a · ∂a/∂θ).</li>
+<li>DDPG = DQN's critic (replay, target networks, Bellman target) + a deterministic actor + exploration noise.</li>
+<li>TD3 adds twin critics (take the min), a delayed actor and target smoothing, all against over-estimation.</li>
+<li>SAC uses a random (squashed Gaussian) actor and adds an entropy bonus inside the reward, with α tuned automatically.</li>
+</ol>
+</div>
+
+<!-- ═══════════ 18 ═══════════ -->
+<h2><span class="n">18</span>Answers to the practice problems</h2>
+<ol>
+<li>21<sup>4</sup> = <b>194,481</b> actions.</li>
+<li>1.0 + 0.1 × (2.0 − 1.0) = <b>1.1</b>; 1.1 + 0.1 × 0.9 = <b>1.19</b>; 1.19 + 0.1 × 0.81 = <b>1.271</b>.</li>
+<li>y = −2 + 0.99 × (−40) = <b>−41.6</b>. Error = −38 − (−41.6) = 3.6; squared = <b>12.96</b>.</li>
+<li>∂Q/∂a = −2(a − 1) = −2(0.2 − 1) = <b>1.6</b>; ∂a/∂θ = <b>1</b>; θ<sub>new</sub> = 0.2 + 0.1 × 1.6 = <b>0.36</b> (moving towards the best torque, 1).</li>
+<li>a = 2·tanh(0) = <b>0</b>; ∂a/∂θ = 2·(1 − 0) = <b>2</b>.</li>
+<li>min(−12, −15) = −15; y = −1 + 0.9 × (−15) = <b>−14.5</b>.</li>
+<li>Noise clipped to +0.5 → 1.8 + 0.5 = 2.3 → clipped to the limit: <b>a2 = 2.0</b>.</li>
+<li>u = −0.2 + 0.5 × 1.0 = <b>0.3</b>; torque = 2 × 0.291 ≈ <b>0.58</b>.</li>
+<li>Bonus −α·log π = −0.1 × (−1.0) = +0.1; y = −1 + 0.99 × (−20 + 0.1) = −1 + 0.99 × (−19.9) = <b>−20.70</b>.</li>
+<li>H = 0 when 2πe·σ² = 1 → σ = 1/√17.08 ≈ <b>0.242</b>. (Below that, a bell curve's entropy is negative.)</li>
+<li>PPO is on-policy: each batch of experience is used for a few epochs, then thrown away. SAC keeps every trial in its replay buffer and learns from it again and again, so it needs far fewer expensive trials.</li>
+<li>Pendulum's physics plus the 1,000 random warm-up moves and the changing start positions already give the replay buffer a lot of variety. In harder tasks, no noise usually means the agent gets stuck.</li>
+</ol>
+
+</main>
+</body>
+</html>

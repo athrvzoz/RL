@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPO Proximal Policy Optimization</title>
+<style>
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --ink:#151B2F; --muted:#5B647A; --line:#D6DCE7;
+  --accent:#2C4BD1; --accent-soft:#E8ECFB; --gold:#A86A08; --gold-soft:#FBF3E2;
+  --good:#1E8A5A; --good-soft:#E3F3EA; --bad:#C2413A; --bad-soft:#FBE7E5; --code:#F1F3F8;
+  --f-body:"Segoe UI", system-ui, sans-serif;
+  --f-mono:Consolas, "Cascadia Mono", monospace;
+}
+@page{size:A4;margin:15mm 15mm 16mm}
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:10.6pt;line-height:1.55;margin:0}
+main{max-width:180mm;margin:0 auto}
+h1{font-size:30pt;line-height:1.05;margin:0 0 8px;font-weight:800;letter-spacing:-.01em}
+h2{font-size:19pt;line-height:1.15;margin:0 0 4px;font-weight:800;break-before:page;padding-top:2px}
+h2 .n{font-family:var(--f-mono);font-size:11pt;color:var(--accent);vertical-align:4pt;margin-right:8px}
+h3{font-size:13pt;margin:18px 0 6px;font-weight:700;break-after:avoid}
+h4{font-size:11pt;margin:12px 0 4px;break-after:avoid}
+.sub{color:var(--muted);margin:0 0 12px;font-size:11pt}
+p{margin:0 0 9px}
+ul,ol{margin:0 0 9px;padding-left:1.3em}
+li{margin-bottom:3px}
+code{font-family:var(--f-mono);font-size:.9em;background:var(--code);padding:0 4px;border-radius:3px}
+pre{font-family:var(--f-mono);font-size:8.6pt;line-height:1.45;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin:0 0 10px;white-space:pre-wrap;break-inside:avoid}
+pre .c{color:#5B647A}
+pre .k{color:var(--accent);font-weight:700}
+pre .h{background:#FFF0C2}
+.box{padding:10px 13px;margin:10px 0;border-radius:5px;break-inside:avoid}
+.box > :last-child{margin-bottom:0}
+.tag{display:block;font-family:var(--f-mono);font-size:8pt;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;font-weight:700}
+.plain{background:var(--accent-soft)} .plain .tag{color:var(--accent)}
+.key{border:2px solid var(--ink)} .key .tag{color:var(--ink)}
+.warn{background:var(--gold-soft);border:1px solid #E6CC97} .warn .tag{color:var(--gold)}
+.ok{background:var(--good-soft)} .ok .tag{color:var(--good)}
+table{border-collapse:collapse;width:100%;font-size:9.6pt;margin:6px 0 12px;break-inside:avoid}
+table.long{break-inside:auto} table.long tr{break-inside:avoid}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:8pt;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#F5F6FA}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+figure{margin:10px 0 14px;break-inside:avoid}
+figure svg{display:block;width:100%;height:auto}
+figure img{display:block;width:100%;border:1px solid var(--line);border-radius:4px}
+figcaption{font-size:9pt;color:var(--muted);margin-top:5px}
+svg text{font-family:var(--f-body);font-size:13px;fill:currentColor}
+svg .t-m{fill:#5B647A} svg .t-a{fill:#2C4BD1;font-weight:700} svg .t-g{fill:#1E8A5A;font-weight:700} svg .t-b{fill:#C2413A;font-weight:700}
+svg .t-h{font-weight:700;font-size:12px;letter-spacing:.06em}
+svg .bx{fill:#fff;stroke:#151B2F;stroke-width:1.4}
+svg .bxa{fill:#E8ECFB;stroke:#2C4BD1;stroke-width:1.6}
+svg .bxg{fill:#E3F3EA;stroke:#1E8A5A;stroke-width:1.6}
+svg .ln{fill:none;stroke:#151B2F;stroke-width:1.5}
+svg .lna{fill:none;stroke:#2C4BD1;stroke-width:2.2}
+svg .lnd{fill:none;stroke:#9AA3B9;stroke-width:1.4;stroke-dasharray:5 4}
+
+/* gridworld boards */
+.boards{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px;break-inside:avoid}
+.board{break-inside:avoid}
+.board .cap{font-family:var(--f-mono);font-size:8pt;color:var(--muted);margin-bottom:3px}
+table.gw{width:auto;border-collapse:separate;border-spacing:2px;margin:0;font-family:var(--f-mono);font-size:8pt}
+table.gw td{width:40px;height:30px;padding:0;text-align:center;vertical-align:middle;border:1px solid var(--line);border-radius:3px;line-height:1.1}
+table.gw.big td{width:62px;height:46px;font-size:9.5pt}
+table.gw.big td b{display:block;font-size:13pt;font-family:var(--f-body)}
+td.wall{background:repeating-linear-gradient(45deg,#D6DCE7 0 3px,#fff 3px 7px)}
+td.G{background:#2E9E68;color:#fff;font-weight:700} td.P{background:#D2564F;color:#fff;font-weight:700}
+td.H{background:#1F3B57;color:#fff;font-weight:700}
+td.g3{background:#8ED1AE} td.g2{background:#B9E3CB} td.g1{background:#E3F3EA} td.ng{background:#FBE7E5}
+td.new{outline:2px solid var(--accent);outline-offset:-2px}
+td.ice{background:#DDEEFF}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cover{height:240mm;display:flex;flex-direction:column;justify-content:center}
+.eyebrow{font-family:var(--f-mono);font-size:9pt;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:13pt;color:var(--muted);max-width:150mm}
+.toc{margin-top:26px;columns:2;column-gap:24px;font-size:10.5pt}
+.toc div{break-inside:avoid;padding:3px 0;border-bottom:1px solid var(--line)}
+.toc span{font-family:var(--f-mono);color:var(--accent);margin-right:8px}
+.qa{border-left:3px solid var(--accent);padding:4px 0 4px 12px;margin:0 0 12px;break-inside:avoid}
+.qa .q{font-weight:700;margin-bottom:3px}
+.qa .q::before{content:"Q. ";color:var(--accent)}
+.wrong{color:var(--bad);font-weight:700} .right{color:var(--good);font-weight:700}
+</style>
+</head>
+<body>
+<main>
+
+<!-- ═══════════ COVER ═══════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Booklet 06</div>
+  <h1>PPO: Proximal<br>Policy Optimization</h1>
+  <p class="lede">The most widely used RL algorithm of the last decade: an actor-critic that improves its policy in careful, fenced-in steps. Used to train Dota 2 bots and to fine-tune chat assistants from human feedback. Every number comes from code in <code>rl_topics/06_ppo</code>.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture</div>
+    <div><span>02</span>Words you need</div>
+    <div><span>03</span>Intuition: don't change your mind too much</div>
+    <div><span>04</span>Recap: policy gradient and actor-critic</div>
+    <div><span>05</span>Maths I: the probability ratio</div>
+    <div><span>06</span>Maths II: the clipped objective</div>
+    <div><span>07</span>Maths III: GAE, the advantage dial</div>
+    <div><span>08</span>Maths IV: the full loss, KL and clip fraction</div>
+    <div><span>09</span>The algorithm</div>
+    <div><span>10</span>The code, line by line</div>
+    <div><span>11</span>Running it: CartPole</div>
+    <div><span>12</span>Experiments: remove the fence; go continuous</div>
+    <div><span>13</span>Real-world problems</div>
+    <div><span>14</span>Side by side</div>
+    <div><span>15</span>Clearing up the confusions</div>
+    <div><span>16</span>Practice problems</div>
+    <div><span>17</span>Run it yourself + cheat sheet</div>
+    <div><span>18</span>Answers</div>
+  </div>
+</section>
+
+<!-- ═══════════ 01 ═══════════ -->
+<h2><span class="n">01</span>The big picture</h2>
+<p class="sub">PPO = actor-critic + "never move the policy too far in one update".</p>
+
+<p>In booklets 04 and 05 you saw policy methods <b>collapse</b>: REINFORCE dropped from 500 to below 200, and A2C fell from 371 to 48 around step 60,000. One unlucky, too-big update made the policy worse; the worse policy then collected worse games and learned worse lessons. A downward spiral.</p>
+<p>PPO (Schulman et al., OpenAI, 2017) adds two ideas to actor-critic:</p>
+<ul>
+<li><b>Reuse each batch of experience several times</b> (10 passes here) instead of once. Far more learning per game played.</li>
+<li><b>A fence:</b> during those passes, no action's probability may change by more than about ±20% compared with the policy that collected the data. Beyond the fence, the update simply stops pushing.</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 170" role="img" aria-label="PPO loop: rollout, GAE, several fenced update epochs, repeat">
+  <defs><marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="40" width="190" height="70" rx="6" class="bx"/><text x="115" y="66" text-anchor="middle" font-weight="700">1 · ROLLOUT</text><text x="115" y="88" text-anchor="middle" class="t-m">play 1,024 moves with π_old</text>
+  <line x1="210" y1="75" x2="268" y2="75" class="ln" marker-end="url(#e1)"/>
+  <rect x="270" y="40" width="190" height="70" rx="6" class="bxa"/><text x="365" y="66" text-anchor="middle" font-weight="700">2 · ADVANTAGES</text><text x="365" y="88" text-anchor="middle" class="t-m">GAE with the critic</text>
+  <line x1="460" y1="75" x2="518" y2="75" class="ln" marker-end="url(#e1)"/>
+  <rect x="520" y="40" width="220" height="70" rx="6" class="bxg"/><text x="630" y="62" text-anchor="middle" font-weight="700">3 · 10 EPOCHS of updates</text><text x="630" y="82" text-anchor="middle">push good moves up, bad down</text><text x="630" y="100" text-anchor="middle" class="t-a">but only within ±20%</text>
+  <path d="M630,110 V145 H115 V112" class="ln" marker-end="url(#e1)"/><text x="372" y="140" text-anchor="middle" class="t-m">throw the batch away, π_old ← π, play again</text>
+</svg>
+<figcaption>Collect a batch, compute how good each move was, improve the policy several times on that batch, but inside a fence.</figcaption>
+</figure>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p><b>PPO</b> plays a batch of games, measures each move's advantage with a critic, and then improves the action probabilities over several passes, using the ratio r = π<sub>new</sub>/π<sub>old</sub> and <b>clipping</b> it to [0.8, 1.2], so that no single update can change the policy too much.</p>
+</div>
+
+<p>PPO became the default because it's simple, works on discrete <i>and</i> continuous actions, and is hard to break. It was used for OpenAI Five (Dota 2) and for the RL step of InstructGPT and early ChatGPT, where the "policy" is a language model (booklet 09).</p>
+
+<!-- ═══════════ 02 ═══════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<table class="long">
+<tr><th style="width:24%">Term</th><th>Meaning in plain words</th><th style="width:27%">In your code</th></tr>
+<tr><td><b>Rollout</b></td><td>A batch of moves played with the current policy before learning: 8 games × 128 steps = 1,024 moves.</td><td><code>collect_rollout()</code></td></tr>
+<tr><td><b>π<sub>old</sub></b></td><td>The policy that played the rollout. Its probabilities are saved and frozen.</td><td><code>logprobs</code> (saved)</td></tr>
+<tr><td><b>π<sub>new</sub></b> (π<sub>θ</sub>)</td><td>The policy being improved during the update epochs.</td><td><code>new_logprobs</code></td></tr>
+<tr><td><b>Ratio</b> r(θ)</td><td>π<sub>new</sub>(a|s) / π<sub>old</sub>(a|s): how much more (or less) likely the action has become.</td><td><code>ratio = exp(new − old)</code></td></tr>
+<tr><td><b>Clip ε</b></td><td>The fence width: 0.2 means the ratio is held within [0.8, 1.2].</td><td><code>clip=0.2</code></td></tr>
+<tr><td><b>Surrogate objective</b></td><td>A stand-in for "expected reward" that we can maximise using old data: r·A.</td><td><code>ratio * adv</code></td></tr>
+<tr><td><b>Clipped surrogate</b></td><td>min(r·A, clip(r)·A): the pessimistic version that stops pushing past the fence.</td><td><code>torch.min(unclipped, clipped)</code></td></tr>
+<tr><td><b>GAE</b></td><td>Generalised Advantage Estimation: a weighted blend of 1-step, 2-step, … advantages.</td><td><code>compute_gae()</code></td></tr>
+<tr><td><b>λ</b> (lambda)</td><td>GAE's dial: 0 = trust the critic after 1 step (TD); 1 = use all real rewards (Monte Carlo).</td><td><code>lam=0.95</code></td></tr>
+<tr><td><b>Epoch</b></td><td>One full pass over the batch. PPO does 10.</td><td><code>epochs=10</code></td></tr>
+<tr><td><b>Minibatch</b></td><td>A random slice of the batch (here 128 moves) used for one gradient step.</td><td><code>minibatches=8</code></td></tr>
+<tr><td><b>KL divergence</b></td><td>A number for "how different are two probability distributions?" 0 = identical.</td><td><code>approx_kl</code></td></tr>
+<tr><td><b>Clip fraction</b></td><td>Share of moves whose ratio went outside the fence: how often the fence was "touched".</td><td><code>clip_frac</code></td></tr>
+<tr><td><b>Advantage normalisation</b></td><td>Rescale the advantages in each minibatch to mean 0, spread 1. Keeps step sizes steady.</td><td><code>(adv − mean)/std</code></td></tr>
+<tr><td><b>Gaussian policy</b></td><td>For continuous actions: the actor outputs a bell curve's centre; its width σ is learned.</td><td><code>Normal(mean, std)</code></td></tr>
+<tr><td><b>Trust region</b></td><td>"Only trust your estimate of improvement near where your data came from." The idea behind the fence.</td><td>—</td></tr>
+</table>
+
+<!-- ═══════════ 03 ═══════════ -->
+<h2><span class="n">03</span>Intuition: don't change your mind too much</h2>
+
+<h3>The cricket batting coach, again</h3>
+<p>After one match the coach notices your pull shot scored well. A sensible coach says "play it a bit more often". A reckless coach says "play <b>only</b> pull shots from now on". The reckless advice is based on one match of evidence, in situations you happened to face. Next match the bowlers adapt and you collapse.</p>
+<p>PPO is the sensible coach. The evidence (the rollout) was gathered with your <b>old</b> style. It's trustworthy for <b>small</b> changes to that style, not for a complete makeover. So:</p>
+<ul>
+<li>Use the evidence several times (rewatch the match video 10 times), but</li>
+<li>never let any shot become more than 20% more (or less) frequent from one match's evidence.</li>
+</ul>
+
+<h3>Why one batch is only trustworthy nearby</h3>
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">Small change: fine</span>
+<p>The batch shows moves the old policy made and how they turned out. If the new policy still makes mostly those moves, the batch still describes it well.</p></div>
+<div class="box warn" style="margin:0"><span class="tag">Big change: blind</span>
+<p>A very different policy visits different states. The batch has no evidence about them. Extrapolating far from your data is guessing.</p></div>
+</div>
+
+<!-- ═══════════ 04 ═══════════ -->
+<h2><span class="n">04</span>Recap: policy gradient and actor-critic</h2>
+<p class="sub">Booklets 04 and 05 in one page.</p>
+<pre style="font-size:9.6pt">
+ACTOR   π<sub>θ</sub>(a|s): network → softmax (or a bell curve) → probabilities; play by rolling dice
+CRITIC  V(s): network → one number, "total reward expected from here"
+
+advantage   A = (what actually happened) − V(s)      "better or worse than expected?"
+            1-step version:  A = δ = r + γ·V(s′) − V(s)
+
+policy-gradient step:   θ ← θ + α · A · ∇log π<sub>θ</sub>(a|s)
+    A &gt; 0 → make a MORE likely;   A &lt; 0 → make a LESS likely
+critic step:            V(s) ← towards  r + γ·V(s′)        (squared-error loss)
+</pre>
+<table>
+<tr><th>Method</th><th>Problem PPO fixes</th></tr>
+<tr><td>REINFORCE</td><td>Noisy (whole-game returns), one update per game, can take a ruinous step.</td></tr>
+<tr><td>A2C</td><td>Uses each batch for <b>one</b> gradient step, then throws it away: wasteful. And still no protection against a big bad step.</td></tr>
+<tr><td><b>PPO</b></td><td><b>10 passes per batch</b> (efficient) + <b>the clip fence</b> (safe).</td></tr>
+</table>
+<div class="box warn"><span class="tag">Reminder: whose probabilities?</span>
+<p>PPO learns the <b>agent's action probabilities</b> π(a|s). The ratio, the clip and the KL all talk about these, never about the world's randomness (slipping ice, wind).</p>
+</div>
+
+<!-- ═══════════ 05 ═══════════ -->
+<h2><span class="n">05</span>Maths I: the probability ratio</h2>
+<p class="sub">The maths: fractions, and log/exp.</p>
+
+<pre style="font-size:9.6pt">
+r(θ) = π<sub>θ</sub>(a|s) / π<sub>old</sub>(a|s)          computed as  exp( log π<sub>θ</sub>(a|s) − log π<sub>old</sub>(a|s) )
+
+r = 1.0   the action is exactly as likely as when it was played
+r = 1.2   20% more likely now
+r = 0.5   half as likely now
+</pre>
+<p>Real output of <code>hand_examples.py</code>: π<sub>old</sub> = 0.5, π<sub>new</sub> = 0.6 → r = 0.6/0.5 = <b>1.20</b>.</p>
+
+<h3>Why the ratio lets us reuse the batch</h3>
+<p>Policy gradient needs averages over actions drawn from the <b>current</b> policy. After the first update, the batch was drawn from π<sub>old</sub>, not π<sub>θ</sub>. Re-weighting each move by r corrects for that (it's the importance-sampling idea from Monte Carlo, booklet 02):</p>
+<pre style="font-size:9.6pt">
+surrogate  L(θ) = average over the batch of  r(θ) · A
+
+its gradient at θ = θ<sub>old</sub>:   ∇r = ∇π<sub>θ</sub>/π<sub>old</sub> = ∇log π<sub>θ</sub>   (because π<sub>θ</sub> = π<sub>old</sub> there)
+                           → exactly the ordinary policy gradient  A·∇log π
+</pre>
+<p>So at the start of the update, maximising r·A is the plain policy gradient. As θ moves away, the ratio keeps the estimate honest, but only while π<sub>θ</sub> stays close to π<sub>old</sub>. That's what the clip enforces.</p>
+
+<!-- ═══════════ 06 ═══════════ -->
+<h2><span class="n">06</span>Maths II: the clipped objective</h2>
+<p class="sub">The heart of PPO. Do the table with a pencil.</p>
+
+<pre style="font-size:9.6pt">
+L<sup>CLIP</sup>(θ) = average of   min(  r·A ,  clip(r, 1−ε, 1+ε)·A  )          ε = 0.2
+                              ▲ normal push    ▲ same push, r held in [0.8, 1.2]
+</pre>
+
+<h3>Six cases (real output of <code>hand_examples.py</code>)</h3>
+<table>
+<tr><th class="n">A</th><th class="n">r</th><th class="n">r·A</th><th class="n">clip(r)·A</th><th class="n">min</th><th>What happens</th></tr>
+<tr><td class="n">+2</td><td class="n">1.10</td><td class="n">+2.20</td><td class="n">+2.20</td><td class="n">+2.20</td><td>good move, small change so far: normal push up</td></tr>
+<tr><td class="n">+2</td><td class="n">1.50</td><td class="n">+3.00</td><td class="n">+2.40</td><td class="n"><b>+2.40</b></td><td>good move, already +50%: the flat clipped value wins → <b>no more push</b></td></tr>
+<tr><td class="n">+2</td><td class="n">0.70</td><td class="n">+1.40</td><td class="n">+1.60</td><td class="n">+1.40</td><td>good move whose probability went <i>down</i>: unclipped wins → keep pushing up</td></tr>
+<tr><td class="n">−2</td><td class="n">0.90</td><td class="n">−1.80</td><td class="n">−1.80</td><td class="n">−1.80</td><td>bad move, small change: normal push down</td></tr>
+<tr><td class="n">−2</td><td class="n">0.50</td><td class="n">−1.00</td><td class="n">−1.60</td><td class="n"><b>−1.60</b></td><td>bad move, already −50%: flat → <b>no more push</b></td></tr>
+<tr><td class="n">−2</td><td class="n">1.40</td><td class="n">−2.80</td><td class="n">−2.40</td><td class="n">−2.80</td><td>bad move that became <i>more</i> likely: unclipped wins → push it back down</td></tr>
+</table>
+
+<figure>
+<svg viewBox="0 0 760 210" role="img" aria-label="Clipped objective versus ratio for positive and negative advantage">
+  <text x="180" y="16" text-anchor="middle" class="t-h t-a">A &gt; 0 (good move)</text>
+  <line x1="40" y1="170" x2="330" y2="170" class="ln"/><line x1="40" y1="170" x2="40" y2="25" class="ln"/>
+  <line x1="152" y1="25" x2="152" y2="170" class="lnd"/><line x1="208" y1="25" x2="208" y2="170" class="lnd"/>
+  <polyline points="40,170 208,46 320,46" fill="none" stroke="#2C4BD1" stroke-width="3"/>
+  <text x="152" y="186" text-anchor="middle" font-size="11">0.8</text><text x="208" y="186" text-anchor="middle" font-size="11">1.2</text><text x="320" y="186" text-anchor="middle" font-size="11">r</text>
+  <text x="268" y="36" text-anchor="middle" class="t-m" font-size="11">flat: no more push</text>
+  <text x="180" y="204" text-anchor="middle" class="t-m" font-size="11">objective rises with r until r = 1.2, then stops</text>
+
+  <text x="580" y="16" text-anchor="middle" class="t-h t-a">A &lt; 0 (bad move)</text>
+  <line x1="440" y1="40" x2="730" y2="40" class="ln"/><line x1="440" y1="40" x2="440" y2="170" class="ln"/>
+  <line x1="552" y1="25" x2="552" y2="170" class="lnd"/><line x1="608" y1="25" x2="608" y2="170" class="lnd"/>
+  <polyline points="440,88 552,88 720,158" fill="none" stroke="#C2413A" stroke-width="3"/>
+  <text x="552" y="56" text-anchor="middle" font-size="11">0.8</text><text x="608" y="56" text-anchor="middle" font-size="11">1.2</text><text x="725" y="56" text-anchor="middle" font-size="11">r</text>
+  <text x="496" y="80" text-anchor="middle" class="t-m" font-size="11">flat: no more push</text>
+  <text x="580" y="204" text-anchor="middle" class="t-m" font-size="11">objective falls as r grows; flat once r &lt; 0.8</text>
+</svg>
+<figcaption>Gradient ascent climbs these lines. Where the line is flat, the slope is 0, so the move stops being pushed. The fence only blocks changes in the direction the advantage wants. Changes in the wrong direction are always corrected.</figcaption>
+</figure>
+
+<div class="box key"><span class="tag">In one line</span>
+<p>"Push good actions up and bad actions down, <b>but once you've moved an action's probability by 20% in the right direction, stop</b>. Wait for fresh evidence before going further."</p>
+</div>
+
+<!-- ═══════════ 07 ═══════════ -->
+<h2><span class="n">07</span>Maths III: GAE, the advantage dial</h2>
+<p class="sub">How good was each move? A blend of short and long looks, controlled by λ.</p>
+
+<pre style="font-size:9.6pt">
+one-step surprise:    δ<sub>t</sub> = r<sub>t</sub> + γ·V(s<sub>t+1</sub>) − V(s<sub>t</sub>)                      (TD error, booklets 01 and 05)
+GAE, built backwards: A<sub>t</sub> = δ<sub>t</sub> + γλ·A<sub>t+1</sub>
+                      = δ<sub>t</sub> + (γλ)·δ<sub>t+1</sub> + (γλ)²·δ<sub>t+2</sub> + …
+critic target:        V-target<sub>t</sub> = A<sub>t</sub> + V(s<sub>t</sub>)
+</pre>
+
+<h3>Worked example (real output): 3 steps, γ = 0.9, the game continues after</h3>
+<pre>
+rewards r = [1, 0, 2]     critic V(s0..s3) = [3, 2, 4, 5]
+
+δ0 = 1 + 0.9×2 − 3 = −0.20       δ1 = 0 + 0.9×4 − 2 = +1.60       δ2 = 2 + 0.9×5 − 4 = +2.50
+
+λ = 0   : A = [−0.200, 1.600, 2.500]     (each move judged by its own one-step surprise)
+λ = 0.95: A = [ 2.996, 3.738, 2.500]
+λ = 1   : A = [ 3.265, 3.850, 2.500]     (= real rewards to the end of the rollout, then V)
+</pre>
+<p>Check λ = 0.95 by hand, backwards: A<sub>2</sub> = 2.5; A<sub>1</sub> = 1.6 + 0.9×0.95×2.5 = 1.6 + 2.1375 = 3.7375; A<sub>0</sub> = −0.2 + 0.855×3.7375 = −0.2 + 3.196 = <b>2.996</b> ✓.</p>
+<div class="box plain"><span class="tag">What the dial means</span>
+<p>Move 0 had a slightly disappointing first step (δ<sub>0</sub> = −0.2), but led into a run of good surprises. With λ = 0 it's judged bad (−0.2). With λ = 0.95 it gets credit for what followed (+3.0). λ trades <b>bias</b> (trusting a possibly wrong critic, λ small) against <b>noise</b> (adding up many random rewards, λ large). 0.95 is the usual choice: the same dial as n-step TD in booklet 01.</p>
+</div>
+
+<!-- ═══════════ 08 ═══════════ -->
+<h2><span class="n">08</span>Maths IV: the full loss, KL and clip fraction</h2>
+
+<pre style="font-size:9.6pt">
+total loss = − L<sup>CLIP</sup>          + 0.5 × (V(s) − V-target)²     − 0.01 × entropy
+             ▲ actor (minus: ascend)    ▲ critic, squared error           ▲ stay a bit random
+</pre>
+
+<h3>Two dials to watch while training</h3>
+<p><b>KL divergence</b>, "how far did the policy move in this update?":</p>
+<pre style="font-size:9.6pt">
+KL(π<sub>old</sub> ‖ π<sub>new</sub>) = Σ<sub>a</sub> π<sub>old</sub>(a) · ln( π<sub>old</sub>(a) / π<sub>new</sub>(a) )        0 = no change
+
+π_old = [0.5, 0.5] → π_new = [0.55, 0.45]   KL = 0.0050     (small step)
+π_old = [0.5, 0.5] → π_new = [0.70, 0.30]   KL = 0.0872
+π_old = [0.5, 0.5] → π_new = [0.95, 0.05]   KL = 0.8304     (a huge change of mind)
+</pre>
+<p>Check the first one: 0.5·ln(0.5/0.55) + 0.5·ln(0.5/0.45) = 0.5 × (−0.0953) + 0.5 × (0.1054) = <b>0.0050</b>. The code uses a cheap approximation on the batch ("approx-KL"). Typical healthy PPO values are around 0.001–0.02.</p>
+<p><b>Clip fraction</b>: the share of moves whose ratio left [0.8, 1.2] during the update. Around 0.0–0.2 is normal. Near 0 means the fence is never touched (steps could be bigger); very high means the policy is straining against it every time.</p>
+
+<!-- ═══════════ 09 ═══════════ -->
+<h2><span class="n">09</span>The algorithm</h2>
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="PPO detailed loop">
+  <defs><marker id="e9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="220" height="60" rx="5" class="bx"/><text x="130" y="44" text-anchor="middle" font-weight="700">1 · ROLLOUT</text><text x="130" y="64" text-anchor="middle" class="t-m">8 games × 128 steps</text>
+  <line x1="240" y1="50" x2="268" y2="50" class="ln" marker-end="url(#e9)"/>
+  <rect x="270" y="20" width="220" height="60" rx="5" class="bx"/><text x="380" y="44" text-anchor="middle" font-weight="700">2 · SAVE</text><text x="380" y="64" text-anchor="middle" class="t-m">s, a, log π_old, r, V(s)</text>
+  <line x1="490" y1="50" x2="518" y2="50" class="ln" marker-end="url(#e9)"/>
+  <rect x="520" y="20" width="220" height="60" rx="5" class="bxa"/><text x="630" y="44" text-anchor="middle" font-weight="700">3 · GAE</text><text x="630" y="64" text-anchor="middle">advantages + V-targets</text>
+  <line x1="630" y1="80" x2="630" y2="148" class="ln" marker-end="url(#e9)"/>
+  <rect x="520" y="150" width="220" height="60" rx="5" class="bxa"/><text x="630" y="174" text-anchor="middle" font-weight="700">4 · SHUFFLE</text><text x="630" y="194" text-anchor="middle">8 minibatches of 128</text>
+  <line x1="520" y1="180" x2="492" y2="180" class="ln" marker-end="url(#e9)"/>
+  <rect x="270" y="150" width="220" height="60" rx="5" class="bxg"/><text x="380" y="174" text-anchor="middle" font-weight="700">5 · CLIPPED LOSS</text><text x="380" y="194" text-anchor="middle">one gradient step each</text>
+  <line x1="270" y1="180" x2="242" y2="180" class="ln" marker-end="url(#e9)"/>
+  <rect x="20" y="150" width="220" height="60" rx="5" class="bx"/><text x="130" y="174" text-anchor="middle" font-weight="700">6 · REPEAT 4–5</text><text x="130" y="194" text-anchor="middle">10 epochs = 80 steps</text>
+  <line x1="130" y1="150" x2="130" y2="82" class="ln" marker-end="url(#e9)"/><text x="138" y="118" class="t-m">then discard the batch, new rollout</text>
+</svg>
+<figcaption>One "update" = 10 epochs × 8 minibatches = 80 gradient steps on the same 1,024 moves.</figcaption>
+</figure>
+
+<h3>Pseudocode</h3>
+<pre>
+actor π<sub>θ</sub>, critic V;   8 game copies
+repeat:
+    play 128 steps in each copy with π<sub>θ</sub>;  save s, a, log π<sub>old</sub>(a|s), r, ended, V(s)
+    A, V-target = GAE(r, V, ended, γ = 0.99, λ = 0.95)
+    for epoch = 1 … 10:
+        shuffle the 1,024 moves into 8 minibatches
+        for each minibatch:
+            A ← (A − mean) / std
+            r = exp(log π<sub>θ</sub>(a|s) − log π<sub>old</sub>(a|s))
+            loss = −mean(min(r·A, clip(r, 0.8, 1.2)·A)) + 0.5·mean((V(s) − V-target)²) − 0.01·entropy
+            gradient step (Adam, lr 3e-4, slowly lowered to 0)
+</pre>
+
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>The code, line by line</h2>
+<p class="sub"><code>ppo.py</code>, shared by CartPole and Pendulum.</p>
+
+<h3>① GAE, walking backwards</h3>
+<pre><span class="k">for</span> t <span class="k">in</span> reversed(range(T)):
+    alive = 1.0 - dones[t]                           <span class="c"># 0 if the game ended at step t</span>
+    delta = rewards[t] + gamma * next_value * alive - values[t]
+    next_adv = delta + gamma * lam * alive * next_adv
+    adv[t] = next_adv
+    next_value = values[t]
+returns = adv + values                               <span class="c"># target for the critic</span></pre>
+
+<h3>② The clipped loss</h3>
+<pre>d = agent.dist(obs)
+new_logprobs = agent.log_prob(d, actions)
+ratio = <span class="h">torch.exp(new_logprobs - old_logprobs)</span>       <span class="c"># r = π_new(a|s) / π_old(a|s)</span>
+unclipped = ratio * adv
+clipped = <span class="h">torch.clamp(ratio, 1 - clip, 1 + clip) * adv</span>
+policy_loss = <span class="h">-torch.min(unclipped, clipped).mean()</span>  <span class="c"># minus: optimisers go DOWNHILL</span>
+value_loss = ((agent.value(obs) - returns) ** 2).mean()
+total = policy_loss + vf_coef * value_loss - ent_coef * entropy</pre>
+
+<h3>③ Several epochs over the same batch</h3>
+<pre><span class="k">for</span> epoch <span class="k">in</span> range(cfg[<span class="c">"epochs"</span>]):                       <span class="c"># 10 passes</span>
+    order = rng.permutation(n)                                <span class="c"># shuffle every epoch</span>
+    <span class="k">for</span> start <span class="k">in</span> range(0, n, mb_size):
+        idx = order[start:start + mb_size]
+        adv = (data[<span class="c">"adv"</span>][idx] - mean) / (std + 1e-8)        <span class="c"># normalise</span>
+        total, ... = ppo_loss(agent, ..., data[<span class="c">"logprobs"</span>][idx], adv, ...)
+        optimizer.zero_grad(); total.backward()
+        nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
+        optimizer.step()</pre>
+
+<table>
+<tr><th style="width:32%">Line</th><th>Meaning</th></tr>
+<tr><td><code>old_logprobs</code></td><td>Saved during the rollout with <code>torch.no_grad()</code>: π<sub>old</sub> stays frozen for all 80 gradient steps.</td></tr>
+<tr><td><code>torch.exp(new − old)</code></td><td>Division done with logs (safer with tiny probabilities): e<sup>ln a − ln b</sup> = a/b.</td></tr>
+<tr><td><code>torch.min(unclipped, clipped)</code></td><td>Chapter 06's table: always take the more pessimistic value.</td></tr>
+<tr><td><code>alive = 1 − dones[t]</code></td><td>A finished game's future doesn't belong to the next game in the same copy, so cut the chain.</td></tr>
+<tr><td>time-limit handling in the rollout</td><td>As in A2C: at a time-out the future still counts, so γ·V(last state) is added to the reward.</td></tr>
+<tr><td><code>anneal_lr</code></td><td>The learning rate slides from 3e-4 to 0 over training: big steps early, gentle at the end.</td></tr>
+<tr><td><code>Normal(mean, log_std.exp())</code></td><td>Continuous actions (Pendulum): a bell-curve policy instead of softmax; same loss, same clip.</td></tr>
+</table>
+
+<!-- ═══════════ 11 ═══════════ -->
+<h2><span class="n">11</span>Running it: CartPole</h2>
+<p class="sub">Real output of <code>python cartpole_ppo.py</code>: 150,000 steps, about 23 seconds.</p>
+
+<pre>
+step   1,024  avg return (last 20 games)   26.3  approx_kl 0.0079  clip_frac 0.108  entropy 0.685
+step  19,456  avg return (last 20 games)  279.9  approx_kl 0.0051  clip_frac 0.021  entropy 0.568
+step  56,320  avg return (last 20 games)  433.9  approx_kl 0.0003  clip_frac 0.000  entropy 0.550
+step  93,184  avg return (last 20 games)  334.2  approx_kl 0.0039  clip_frac 0.032  entropy 0.532
+step 102,400  avg return (last 20 games)  500.0  approx_kl 0.0026  clip_frac 0.021  entropy 0.529
+step 149,504  avg return (last 20 games)  500.0  approx_kl 0.0000  clip_frac 0.000  entropy 0.517
+(some rows left out)
+
+First perfect (500) game at step 16,312.   Exam, 20 new games: avg 500.0, min 500
+</pre>
+<figure><img src="file:///D:/Langchain/rl_topics/06_ppo/cartpole_ppo.png" alt="PPO CartPole curve, approx-KL and clip fraction"><figcaption>Left: score. Middle: approx-KL per update, always below 0.01 (small, careful steps). Right: clip fraction, mostly 0–10%.</figcaption></figure>
+
+<h3>What the very first update did (6 moves from the batch)</h3>
+<pre>
+action  advantage   π_old   π_new   ratio
+ right     +11.91   0.500   0.497   0.994
+  left      +5.90   0.499   0.446   0.895
+  left      +5.75   0.503   0.609   1.212     ← past 1.2: the fence stopped this push
+ right      +4.56   0.502   0.588   1.171
+ right      +8.81   0.500   0.499   0.998
+ right      +7.17   0.501   0.544   1.086
+</pre>
+<ul>
+<li>All six advantages are positive here (early on, surviving longer than the critic's low guess is good news), yet not all probabilities went up. One network shares weights across many states, so pushing some moves up moves others too.</li>
+<li>The third move reached r = 1.212: just past the fence. From that point its push was switched off.</li>
+<li>Training still had a dip (434 → 334 around step 90,000), but it recovered to 500 and stayed there, with KL always small.</li>
+</ul>
+
+<!-- ═══════════ 12 ═══════════ -->
+<h2><span class="n">12</span>Experiments: remove the fence; go continuous</h2>
+<p class="sub">Real output of <code>python ablation.py</code> (2 seeds × 100,000 steps) and <code>python pendulum_ppo.py</code>.</p>
+
+<table>
+<tr><th>Variant</th><th class="n">last-50 avg</th><th class="n">exam</th><th class="n">largest approx-KL</th><th class="n">largest change of one probability</th></tr>
+<tr><td>PPO (clip 0.2)</td><td class="n">446.5</td><td class="n">491.7</td><td class="n">0.010 / 0.007</td><td class="n">×2.0 / ×1.7</td></tr>
+<tr><td>no clip (ε = 100)</td><td class="n">387.4</td><td class="n">493.5</td><td class="n">0.33 / 0.67</td><td class="n">×40 / ×274</td></tr>
+<tr><td><b>no clip, lr ×10</b></td><td class="n"><b>9.3</b></td><td class="n"><b>9.3</b></td><td class="n">5.2 / 6.2</td><td class="n"><b>×1,000,000</b></td></tr>
+<tr><td><b>clip 0.2, lr ×10</b></td><td class="n"><b>500.0</b></td><td class="n"><b>500.0</b></td><td class="n">0.020 / 0.025</td><td class="n">×4.2 / ×4.1</td></tr>
+</table>
+<figure><img src="file:///D:/Langchain/rl_topics/06_ppo/ablation.png" alt="Ablation scores and approx-KL"><figcaption>Left: scores (solid seed 0, dashed seed 1). Red: no clip with big steps collapses to ~9 within 10,000 steps and never recovers. Right: approx-KL. Without the clip it reaches 1–6; with it, it stays near 0.001–0.02.</figcaption></figure>
+
+<h3>What the four rows teach</h3>
+<ul>
+<li><b>No fence + big steps = disaster.</b> Some action probabilities changed a <b>million-fold</b> in one update. The policy became certain of a terrible action, played only that, and the near-zero probabilities of everything else meant it could never discover anything better. Score 9 is <i>worse than random</i> (≈ 22).</li>
+<li><b>The fence makes big steps safe.</b> With the same ×10 learning rate, the clipped version learned fastest of all and was perfect on both seeds. The fence capped every move's change (largest ×4.2 over a whole update), so speed didn't turn into recklessness.</li>
+<li><b>No fence + normal steps</b> mostly works on easy CartPole, but its KL was 10–100× larger and one seed wobbled badly (dropping to about 50 mid-training). On harder tasks that's where runs die.</li>
+<li>2 seeds per variant: treat 446 vs 387 as a hint; 500 vs 9 as a fact.</li>
+</ul>
+
+<h3>Continuous actions: Pendulum (one torque in [−2, 2])</h3>
+<pre>
+First 50 games: avg −1195    last 50 games: avg −189         (random play ≈ −1200, 0 = perfect)
+Exam, 20 new games, centre of the bell curve: avg −172, best −0, worst −471
+Learned bell-curve width (σ of the torque): 0.228 (started at 0.607)
+
+chosen torque (bell centre), pendulum still:   −30° → +3.67   −10° → +1.78   0° → −0.04
+                                               +10° → −1.77   +30° → −3.16   (clipped to ±2 by the game)
+</pre>
+<figure><img style="max-width:140mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/06_ppo/pendulum_ppo.png" alt="PPO on Pendulum"><figcaption>300,000 steps (28 s). The same <code>ppo.py</code>, with a bell-curve actor. It learns to swing up and balance; scores vary with the start position.</figcaption></figure>
+<ul>
+<li>The learned rule is sensible: tilted left (−) → push +, tilted right → push −, upright → about 0.</li>
+<li>The bell's centre can go beyond the legal range (+3.67); the game clips it to +2. PPO's Gaussian doesn't know the limits, which is one reason SAC (booklet 07) squashes with tanh.</li>
+<li>The width σ shrank from 0.61 to 0.23: the policy became more certain as it learned (entropy fell from 0.94 to about −0.06; a bell curve's entropy can be negative).</li>
+<li>Honest comparison: PPO needed about 300,000 steps; SAC/TD3 in booklet 07 reached similar or better scores in about 15,000 by reusing data from a replay buffer. On-policy methods pay for their stability with sample hunger.</li>
+</ul>
+
+<!-- ═══════════ 13 ═══════════ -->
+<h2><span class="n">13</span>Real-world problems</h2>
+<div class="box plain"><span class="tag">When PPO fits</span>
+<p>✔ You can generate lots of experience (a fast simulator, many copies). ✔ Discrete or continuous actions. ✔ You want a robust default that rarely blows up. ✘ Experience is expensive (a real robot, real money): an off-policy method (SAC) reuses data far better.</p>
+</div>
+
+<h3>1 · Fine-tuning a chat assistant with human feedback (well documented)</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>the prompt and the words written so far</td></tr>
+<tr><td><b>Action</b></td><td>the next token, from the language model's softmax: the language model <b>is</b> π<sub>θ</sub></td></tr>
+<tr><td><b>Reward</b></td><td>at the end: a reward model's score of the whole answer, minus a penalty for drifting too far from the original model (a KL penalty)</td></tr>
+<tr><td><b>Why PPO</b></td><td>A language model is a huge policy; one bad update could ruin its writing. The clip (plus the KL penalty) keeps every step small. InstructGPT (OpenAI, 2022) used exactly this; booklet 09 explains it in detail.</td></tr>
+<tr><td><b>Pitfall</b></td><td>"Reward hacking": the policy finds answers the reward model over-scores (e.g. very long ones). The KL penalty and careful reward models fight it.</td></tr>
+</table>
+
+<h3>2 · Game-playing teams (well documented)</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>thousands of numbers describing the game (units, health, positions)</td></tr>
+<tr><td><b>Action</b></td><td>move / attack / use ability, with targets: a large discrete action space</td></tr>
+<tr><td><b>Reward</b></td><td>win/loss plus shaped rewards (resources, kills)</td></tr>
+<tr><td><b>Why PPO</b></td><td>OpenAI Five trained with PPO on thousands of game copies in parallel through self-play, and beat the world champion team in Dota 2 (2019). PPO scales well to many parallel copies.</td></tr>
+</table>
+
+<h3>3 · A walking robot, trained in simulation first</h3>
+<table>
+<tr><td style="width:22%"><b>State</b></td><td>joint angles and speeds, body orientation, foot contacts</td></tr>
+<tr><td><b>Action</b></td><td>target angle for each joint (continuous, Gaussian policy)</td></tr>
+<tr><td><b>Reward</b></td><td>+forward speed − energy − falling penalty</td></tr>
+<tr><td><b>Why PPO</b></td><td>Physics simulators can run thousands of robots in parallel, so sample hunger doesn't matter, and PPO's stability does. Many legged-robot projects train with PPO in simulation, then transfer to the real robot ("sim-to-real") with randomised physics.</td></tr>
+<tr><td><b>Pitfall</b></td><td>The sim-to-real gap; and robots learn strange gaits if the reward doesn't penalise them.</td></tr>
+</table>
+
+<!-- ═══════════ 14 ═══════════ -->
+<h2><span class="n">14</span>Side by side</h2>
+<table class="long">
+<tr><th style="width:20%"></th><th>REINFORCE</th><th>A2C</th><th>PPO</th><th>DQN</th><th>SAC</th></tr>
+<tr><td>Learns</td><td>π</td><td>π + V</td><td>π + V</td><td>Q</td><td>π + 2 Q</td></tr>
+<tr><td>Advantage from</td><td>real returns</td><td>n-step + critic</td><td><b>GAE (λ dial)</b></td><td>—</td><td>—</td></tr>
+<tr><td>Passes per batch</td><td>1</td><td>1</td><td><b>10</b></td><td>replay (many)</td><td>replay (many)</td></tr>
+<tr><td>Protection against big steps</td><td>none</td><td>none (grad clipping only)</td><td><b>ratio clip</b></td><td>target network</td><td>target networks</td></tr>
+<tr><td>On / off-policy</td><td>on</td><td>on</td><td>on (mild reuse)</td><td>off</td><td>off</td></tr>
+<tr><td>Actions</td><td>both</td><td>both</td><td>both</td><td>discrete</td><td>continuous</td></tr>
+<tr><td>Sample efficiency</td><td>low</td><td>low</td><td>medium</td><td>high</td><td>high</td></tr>
+<tr><td>Stability</td><td>low</td><td>medium</td><td><b>high</b></td><td>medium</td><td>high</td></tr>
+<tr><td>Our CartPole result</td><td>500 (with baseline), 600 games</td><td>500 exam</td><td>500 exam, first 500 at 16k steps</td><td>best net 473</td><td>—</td></tr>
+</table>
+
+<!-- ═══════════ 15 ═══════════ -->
+<h2><span class="n">15</span>Clearing up the confusions</h2>
+<div class="qa"><div class="q">Is PPO value-based or policy-based?</div><p>Both: an actor-critic. The actor (policy) is what's being optimised; the critic only supplies advantages.</p></div>
+<div class="qa"><div class="q">Does the clip stop the policy from ever changing more than 20%?</div><p>Per update, roughly, and only in the direction the advantage wants. Over many updates the policy can change completely. Also, the clip stops the <i>push</i> once past the fence; other moves sharing the weights can still nudge it a bit further (we saw ×2–4 at most).</p></div>
+<div class="qa"><div class="q">Why take the min, not just the clipped value?</div><p>The min picks the pessimistic option. If an action moved the <i>wrong</i> way (a good action became less likely), the unclipped term is smaller and keeps the correction active. Clipping alone would also block those corrections.</p></div>
+<div class="qa"><div class="q">Why is π<sub>old</sub> frozen?</div><p>It's the policy that actually played the batch. The ratio compares the improving policy to it; if it moved too, there would be no fixed point of reference.</p></div>
+<div class="qa"><div class="q">Is the ratio the same as Monte Carlo's importance ratio ρ?</div><p>Same idea, one step at a time. Monte Carlo multiplied ratios over a whole game, which can explode; PPO uses one ratio per move and clips it, which keeps it tame.</p></div>
+<div class="qa"><div class="q">What if the advantage is exactly 0?</div><p>r·0 = 0: no push either way. The move was exactly as good as the critic expected.</p></div>
+<div class="qa"><div class="q">Why normalise advantages in each minibatch?</div><p>Their scale changes over training (early CartPole advantages ~+10, later smaller). Normalising keeps step sizes steady and splits each batch into "better than average" (+) and "worse than average" (−).</p></div>
+<div class="qa"><div class="q">Why throw the batch away after 10 epochs?</div><p>After 10 epochs the policy has moved; the batch describes the old policy, and the ratio trick is only trustworthy nearby. Fresh data is needed. (That's the meaning of "on-policy".)</p></div>
+
+<div class="qa"><div class="q">Entropy became negative on Pendulum. Is that a bug?</div><p>No. Entropy of a continuous bell curve is ½·ln(2πe·σ²), which is negative once σ &lt; 0.24. Only discrete distributions have entropy ≥ 0.</p></div>
+<div class="qa"><div class="q">Is PPO what ChatGPT-style assistants use?</div><p>PPO was the RL algorithm in the published InstructGPT recipe. Newer systems also use other methods (DPO, booklet 09, and variants). The core idea, careful policy improvement from a reward signal, remains.</p></div>
+
+<!-- ═══════════ 16 ═══════════ -->
+<h2><span class="n">16</span>Practice problems</h2>
+<ol>
+<li><b>Ratio.</b> π<sub>old</sub>(a|s) = 0.25, π<sub>new</sub>(a|s) = 0.35. r = ?</li>
+<li><b>Clip.</b> ε = 0.2, A = +3. Compute the clipped-objective value for r = 0.9, 1.3 and 0.6.</li>
+<li><b>Clip, negative A.</b> ε = 0.2, A = −1. Same three ratios.</li>
+<li><b>Gradient on or off?</b> For each case in problems 2 and 3, is the push still active (non-zero slope) or switched off?</li>
+<li><b>Log trick.</b> log π<sub>new</sub> = −0.80, log π<sub>old</sub> = −1.00. Compute r. (e<sup>0.2</sup> ≈ 1.221)</li>
+<li><b>GAE.</b> γ = 1, λ = 0.5, δ = [1, −2, 4] (the game continues). Compute A<sub>2</sub>, A<sub>1</sub>, A<sub>0</sub>.</li>
+<li><b>Critic target.</b> In problem 6, V(s<sub>0</sub>) = 10. What is the critic's target for s<sub>0</sub>?</li>
+<li><b>KL.</b> π<sub>old</sub> = [0.5, 0.5], π<sub>new</sub> = [0.6, 0.4]. KL? (ln(0.5/0.6) ≈ −0.182, ln(0.5/0.4) ≈ 0.223)</li>
+<li><b>Counting.</b> 16 game copies × 256 steps, 4 epochs, 32 minibatches. How many moves per batch, moves per minibatch, gradient steps per update?</li>
+<li><b>Conceptual.</b> Why did "clip 0.2, lr ×10" beat normal PPO on CartPole, and why might it be risky on a hard task?</li>
+<li><b>Conceptual.</b> Your clip fraction is 0.6 every update. What does that tell you, and what would you change?</li>
+<li><b>Coding.</b> In <code>cartpole_ppo.py</code>, train with <code>epochs=1</code>. Predict: faster or slower than 10 epochs per step of experience?</li>
+</ol>
+
+<!-- ═══════════ 17 ═══════════ -->
+<h2><span class="n">17</span>Run it yourself + cheat sheet</h2>
+<pre><span class="c"># all scripts live here</span>
+cd D:\Langchain\rl_topics\06_ppo
+python hand_examples.py      <span class="c"># ratio, the six clip cases, GAE for λ = 0 / 0.95 / 1, KL        (1 s)</span>
+python cartpole_ppo.py       <span class="c"># PPO on CartPole + first-update snapshot                        (~30 s)</span>
+python ablation.py           <span class="c"># remove the clip, raise the learning rate (2 seeds each)        (~3 min)</span>
+python pendulum_ppo.py       <span class="c"># continuous torque with a bell-curve actor                      (~1 min)</span>
+<span class="c"># add --no-show to save the charts without opening windows</span></pre>
+
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">PPO in 10 lines</span>
+<pre style="background:#fff;margin:6px 0">repeat:
+  rollout 1,024 moves with π; save logπ_old
+  A = GAE(δ = r + γV(s′) − V(s), λ)
+  for 10 epochs, 8 shuffled minibatches:
+    A = normalise(A)
+    r = exp(logπ − logπ_old)
+    L = −min(rA, clip(r,.8,1.2)A)
+      + 0.5(V − target)² − 0.01·H
+    gradient step
+  discard the batch</pre></div>
+<div class="box ok" style="margin:0"><span class="tag">Key formulas</span>
+<pre style="background:#fff;margin:6px 0">r = π_new(a|s) / π_old(a|s)
+L = min(r·A, clip(r,1−ε,1+ε)·A)
+δ_t = r_t + γV(s_t+1) − V(s_t)
+A_t = δ_t + γλ·A_t+1
+V-target = A + V
+KL = Σ π_old·ln(π_old/π_new)</pre></div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">Four sentences to remember</span>
+<ol style="margin:0">
+<li>PPO is an actor-critic that reuses each batch for several epochs, correcting with the ratio r = π<sub>new</sub>/π<sub>old</sub>.</li>
+<li>The clipped objective min(r·A, clip(r)·A) stops pushing an action once its probability has moved ±20% in the direction the advantage wants.</li>
+<li>GAE's λ blends short (TD) and long (Monte Carlo) views of each move's advantage.</li>
+<li>Without the fence, big steps destroyed the policy (score 9, probabilities changed a million-fold); with it, the same big steps were safe (500).</li>
+</ol>
+</div>
+
+<!-- ═══════════ 18 ═══════════ -->
+<h2><span class="n">18</span>Answers</h2>
+<ol>
+<li>r = 0.35 / 0.25 = <b>1.4</b>.</li>
+<li>r = 0.9: min(2.7, 2.7) = <b>2.7</b>. r = 1.3: min(3.9, 1.2×3 = 3.6) = <b>3.6</b>. r = 0.6: min(1.8, 0.8×3 = 2.4) = <b>1.8</b>.</li>
+<li>r = 0.9: min(−0.9, −0.9) = <b>−0.9</b>. r = 1.3: min(−1.3, −1.2) = <b>−1.3</b>. r = 0.6: min(−0.6, −0.8) = <b>−0.8</b>.</li>
+<li>A = +3: 0.9 active; 1.3 <b>off</b> (flat, past the fence); 0.6 active (good move became less likely, keep correcting). A = −1: 0.9 active; 1.3 active (bad move became more likely, push it back); 0.6 <b>off</b>.</li>
+<li>r = e<sup>−0.80 − (−1.00)</sup> = e<sup>0.2</sup> ≈ <b>1.221</b>.</li>
+<li>γλ = 0.5. A<sub>2</sub> = 4; A<sub>1</sub> = −2 + 0.5 × 4 = <b>0</b>; A<sub>0</sub> = 1 + 0.5 × 0 = <b>1</b>.</li>
+<li>Target = A<sub>0</sub> + V(s<sub>0</sub>) = 1 + 10 = <b>11</b>.</li>
+<li>KL = 0.5 × (−0.182) + 0.5 × 0.223 = −0.091 + 0.1115 ≈ <b>0.020</b>.</li>
+<li>16 × 256 = <b>4,096</b> moves; 4,096 / 32 = <b>128</b> per minibatch; 4 × 32 = <b>128</b> gradient steps per update.</li>
+<li>CartPole is easy and the fence kept every step safe, so bigger steps just meant faster learning. On a hard task, even fenced steps can be noisy: a large learning rate makes the critic and the network's shared weights jumpy. The fence limits the change per move, not every kind of damage.</li>
+<li>The policy pushes against the fence on most moves every update: steps are too big for the fence. Lower the learning rate or the number of epochs (or the clip is too tight for your problem).</li>
+<li>Prediction: slower per step of experience. Each batch is used for 8 gradient steps instead of 80, so less learning per game played (closer to A2C). Run it to see.</li>
+</ol>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,45 @@
+========================================================================
+PART 1 · One game and its backwards update (after 10,000 games of practice)
+========================================================================
+  The game, step by step (nothing is learned while playing):
+    step 0: state (sum  9, dealer  7, no ace    )  -> hit    reward +0
+    step 1: state (sum 18, dealer  7, no ace    )  -> hit    reward +0
+    step 2: state (sum 21, dealer  7, no ace    )  -> stick  reward +1
+    game over: WIN
+
+  NOW the update, walking BACKWARDS from the last step (γ = 1):
+    step 2: G = +1 + 1 × (G after) = +1   V(sum 21, dealer  7, no ace    ): +0.908 + (+1 − +0.908) / 77 = +0.909
+    step 1: G = +0 + 1 × (G after) = +1   V(sum 18, dealer  7, no ace    ): -0.792 + (+1 − -0.792) / 102 = -0.775
+    step 0: G = +0 + 1 × (G after) = +1   V(sum  9, dealer  7, no ace    ): -0.292 + (+1 − -0.292) / 25 = -0.240
+
+========================================================================
+PART 2 · Value of 'stick on 20+' : 10,000 games vs 500,000 games
+========================================================================
+
+  10,000 games: 280 different states seen
+    V(sum 20, dealer 10, no ace    ) = +0.411   (from 587 visits)
+    V(sum 21, dealer 10, no ace    ) = +0.862   (from 298 visits)
+    V(sum 19, dealer 10, no ace    ) = -0.807   (from 446 visits)
+    V(sum 13, dealer  2, no ace    ) = -0.716   (from 95 visits)
+    V(sum 13, dealer  2, usable ace) = -0.111   (from 9 visits)
+    V(sum 21, dealer  A, usable ace) = +0.659   (from 41 visits)
+
+  500,000 games: 280 different states seen
+    V(sum 20, dealer 10, no ace    ) = +0.437   (from 29,880 visits)
+    V(sum 21, dealer 10, no ace    ) = +0.890   (from 15,260 visits)
+    V(sum 19, dealer 10, no ace    ) = -0.748   (from 22,176 visits)
+    V(sum 13, dealer  2, no ace    ) = -0.601   (from 4,732 visits)
+    V(sum 13, dealer  2, usable ace) = -0.226   (from 451 visits)
+    V(sum 21, dealer  A, usable ace) = +0.676   (from 2,274 visits)
+
+  500,000 games, no usable ace: average V for sums 12-19 = -0.646, for sum 20 = +0.621, for sum 21 = +0.878
+
+========================================================================
+PART 3 · First-visit vs every-visit
+========================================================================
+  Games (out of 100,000) in which some state appeared twice: 0
+  Biggest difference between first-visit and every-visit V: 0.000000
+  (Your sum only goes up, and a usable ace can only turn into a non-usable one,
+   so a Blackjack state can never repeat inside one game.)
+
+Charts saved to prediction_heatmaps.png and prediction_surface.png

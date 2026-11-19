@@ -1,0 +1,36 @@
+PPO on CartPole-v1: 8 games at once, 128 steps each → batch of 1,024 moves,
+10 epochs × 8 minibatches per batch, clip ε = 0.2
+
+  step   1,024  avg return (last 20 games)    26.3  approx_kl 0.0079  clip_frac 0.108  entropy 0.685
+  step  10,240  avg return (last 20 games)   132.3  approx_kl 0.0023  clip_frac 0.008  entropy 0.599
+  step  19,456  avg return (last 20 games)   279.9  approx_kl 0.0051  clip_frac 0.021  entropy 0.568
+  step  28,672  avg return (last 20 games)   311.5  approx_kl 0.0056  clip_frac 0.047  entropy 0.564
+  step  37,888  avg return (last 20 games)   397.2  approx_kl 0.0002  clip_frac 0.000  entropy 0.573
+  step  47,104  avg return (last 20 games)   397.3  approx_kl 0.0027  clip_frac 0.012  entropy 0.565
+  step  56,320  avg return (last 20 games)   433.9  approx_kl 0.0003  clip_frac 0.000  entropy 0.550
+  step  65,536  avg return (last 20 games)   374.4  approx_kl 0.0052  clip_frac 0.055  entropy 0.566
+  step  74,752  avg return (last 20 games)   475.1  approx_kl 0.0078  clip_frac 0.083  entropy 0.569
+  step  83,968  avg return (last 20 games)   388.3  approx_kl 0.0000  clip_frac 0.000  entropy 0.561
+  step  93,184  avg return (last 20 games)   334.2  approx_kl 0.0039  clip_frac 0.032  entropy 0.532
+  step 102,400  avg return (last 20 games)   500.0  approx_kl 0.0026  clip_frac 0.021  entropy 0.529
+  step 111,616  avg return (last 20 games)   500.0  approx_kl 0.0045  clip_frac 0.025  entropy 0.524
+  step 120,832  avg return (last 20 games)   500.0  approx_kl 0.0030  clip_frac 0.028  entropy 0.517
+  step 130,048  avg return (last 20 games)   500.0  approx_kl 0.0031  clip_frac 0.016  entropy 0.524
+  step 139,264  avg return (last 20 games)   500.0  approx_kl 0.0030  clip_frac 0.013  entropy 0.501
+  step 148,480  avg return (last 20 games)   500.0  approx_kl 0.0000  clip_frac 0.000  entropy 0.496
+  step 149,504  avg return (last 20 games)   500.0  approx_kl 0.0000  clip_frac 0.000  entropy 0.517
+  (23 s)
+
+The FIRST update, 6 moves from the batch:
+  action  advantage   π_old   π_new   ratio
+   right     +11.91   0.500   0.497   0.994
+    left      +5.90   0.499   0.446   0.895
+    left      +5.75   0.503   0.609   1.212
+   right      +4.56   0.502   0.588   1.171
+   right      +8.81   0.500   0.499   0.998
+   right      +7.17   0.501   0.544   1.086
+
+Games played: 546; first perfect (500) game at step 16,312
+Exam, 20 new games, most likely action: avg 500.0, min 500
+
+Chart saved to cartpole_ppo.png

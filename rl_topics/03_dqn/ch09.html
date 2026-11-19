@@ -1,0 +1,43 @@
+<!-- ═══════════ 09 ═══════════ -->
+<h2><span class="n">09</span>Running it on CartPole</h2>
+<p class="sub">Real output of <code>python cartpole_dqn.py</code>: 50,000 steps, seed 0.</p>
+
+<pre>
+step   2500  eps 0.286  games  143  train avg(last 20)   21.6  test (greedy)  431.0
+step   5000  eps 0.082  games  155  train avg(last 20)  133.3  test (greedy)  272.1
+step  10000  eps 0.050  games  177  train avg(last 20)  223.9  test (greedy)  242.1
+step  17500  eps 0.050  games  212  train avg(last 20)  206.1  test (greedy)  111.2
+step  27500  eps 0.050  games  290  train avg(last 20)  133.7  test (greedy)  335.4
+step  35000  eps 0.050  games  341  train avg(last 20)  128.7  test (greedy)  110.5
+step  45000  eps 0.050  games  403  train avg(last 20)  157.3  test (greedy)  360.3
+step  50000  eps 0.050  games  426  train avg(last 20)  232.0  test (greedy)  153.3
+(some rows left out)
+
+Best network, 100 test games with no exploration: average score 472.9 (max 500)
+</pre>
+
+<figure><img src="file:///D:/Langchain/rl_topics/03_dqn/cartpole_dqn.png" alt="DQN learning curve and loss on CartPole"><figcaption>Left: training games (light blue), their running average (orange) and the greedy test score every 2,500 steps (green). Right: the loss jumps around for the whole run.</figcaption></figure>
+
+<h3>What to notice (honestly)</h3>
+<ul>
+<li><b>It learned fast:</b> after only 143 games (2,500 steps) the greedy test already scored 431. A random player scores about 22.</li>
+<li><b>Then it wobbled:</b> test scores swung between 110 and 360 for the rest of the run. This is the famous <b>instability of DQN</b>: improving Q for some states disturbs others (chapter 05's shared weights), and the buffer fills with "good" states so it forgets what danger looks like.</li>
+<li><b>Keeping the best network matters:</b> the saved best version averages <b>472.9 out of 500</b> over 100 fresh games. Real DQN projects always keep checkpoints, for exactly this reason.</li>
+<li><b>The loss is not a scoreboard:</b> it doesn't go down steadily, because the targets keep moving. Judge an RL agent by its score, not by its loss.</li>
+</ul>
+
+<h3>Looking inside the best network</h3>
+<pre>
+state                       Q(left)   Q(right)   choice
+balanced, still               3.2       3.2      push RIGHT  (a near-tie)
+pole leaning RIGHT            3.1       3.2      push RIGHT  ✓ like balancing a stick
+pole leaning LEFT             3.2       3.2      push LEFT   ✓
+pole falling right fast       2.6       2.6      push RIGHT  ✓
+almost fallen right           2.7       2.8      push RIGHT  ✓
+</pre>
+<div class="box key"><span class="tag">Two lessons in one table</span>
+<ul style="margin:0">
+<li><b>It discovered the human rule</b> "push toward the side the pole leans", without anyone telling it. Nobody wrote this rule into the code.</li>
+<li><b>The values are far from "true"</b>: about 3, while a perfect player's true Q is close to 100 (= 1/(1 − 0.99)). The best network came from step 2,500, very early, before the values had grown. It still plays well because choosing an action only needs the <b>order</b> of Q(left) and Q(right) to be right, not their size. Nearly-falling states correctly get lower values (2.6–2.8) than calm ones (3.2).</li>
+</ul>
+</div>

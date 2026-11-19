@@ -1,0 +1,24 @@
+1 · THE RATIO
+  π_old(a|s) = 0.5, π_new(a|s) = 0.6  →  r = 0.6/0.5 = 1.20
+
+2 · THE CLIPPED OBJECTIVE  (ε = 0.2, so r is clipped to [0.8, 1.2])
+      A     r     r·A  clip(r)·A     min   what happens
+     +2  1.10   +2.20      +2.20   +2.20   A>0, small change: normal push up
+     +2  1.50   +3.00      +2.40   +2.40   A>0, already +50%: clipped → no more push
+     +2  0.70   +1.40      +1.60   +1.40   A>0, but prob went DOWN: unclipped, fix it
+     -2  0.90   -1.80      -1.80   -1.80   A<0, small change: normal push down
+     -2  0.50   -1.00      -1.60   -1.60   A<0, already −50%: clipped → no more push
+     -2  1.40   -2.80      -2.40   -2.80   A<0, but prob went UP: unclipped, fix it
+
+3 · GAE on a 3-step rollout (γ = 0.9), the game continues afterwards
+  δ0 = r0 + 0.9·V(s1) − V(s0) = 1 + 0.9×2 − 3 = -0.20
+  δ1 = r1 + 0.9·V(s2) − V(s1) = 0 + 0.9×4 − 2 = +1.60
+  δ2 = r2 + 0.9·V(s3) − V(s2) = 2 + 0.9×5 − 4 = +2.50
+  λ = 0.0 : A = [-0.2  1.6  2.5]   critic targets = [2.8 3.6 6.5]
+  λ = 0.95: A = [2.996 3.738 2.5  ]   critic targets = [5.996 5.738 6.5  ]
+  λ = 1.0 : A = [3.265 3.85  2.5  ]   critic targets = [6.265 5.85  6.5  ]
+
+4 · APPROX-KL: how far did the policy move?
+  π_old = [0.5, 0.5] → π_new = [0.55, 0.45]   KL = 0.0050
+  π_old = [0.5, 0.5] → π_new = [0.7, 0.3]   KL = 0.0872
+  π_old = [0.5, 0.5] → π_new = [0.95, 0.05]   KL = 0.8304

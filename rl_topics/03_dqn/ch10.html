@@ -1,0 +1,23 @@
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>Experiments: remove the tricks</h2>
+<p class="sub">Real output of <code>python ablations.py</code>: each variant 2 seeds × 40,000 steps. ("Ablation" = remove one part and see what breaks.)</p>
+
+<table>
+<tr><th>Variant</th><th class="n">avg test score during training</th><th class="n">final network</th><th class="n">best network</th><th class="n">avg max-Q at the end</th></tr>
+<tr><td>full DQN (replay + target net)</td><td class="n"><b>190.0</b></td><td class="n">162.6</td><td class="n">365.5</td><td class="n">55.4</td></tr>
+<tr><td>no replay buffer</td><td class="n">31.9</td><td class="n">185.6</td><td class="n">185.6</td><td class="n">65.0</td></tr>
+<tr><td>no target network</td><td class="n"><b>9.3</b></td><td class="n">9.4</td><td class="n">9.4</td><td class="n"><b>19,719,008</b></td></tr>
+<tr><td>Double DQN</td><td class="n">153.8</td><td class="n"><b>253.2</b></td><td class="n"><b>394.9</b></td><td class="n">56.7</td></tr>
+</table>
+<p style="font-size:9pt;color:var(--muted)">Reference: perfect play = 500; a random player ≈ 22; the largest possible true Q with γ = 0.99 is about 100.</p>
+
+<figure><img src="file:///D:/Langchain/rl_topics/03_dqn/ablations.png" alt="Ablation test scores and max-Q"><figcaption>Left: greedy test score during training (mean of 2 seeds). Right: the network's average max-Q on 200 fixed states. The "no target net" line explodes to about 20 million; the other three stay near 55–65 and look flat at this scale.</figcaption></figure>
+
+<h3>What each result teaches</h3>
+<ul>
+<li><b>No target network → total collapse.</b> Q-values grew to about <b>20 million</b>, when no true value can exceed 100. Each update raised Q(s, a), which raised the target max Q(s2), which raised Q again: the dog chasing its tail, faster and faster. The agent scored 9, <b>worse than random</b>. This is the "moving target" problem of chapter 06, in real numbers.</li>
+<li><b>No replay buffer → very slow and fragile.</b> Learning only from the move just made gave a mean test score of 31.9 during training; one seed finally jumped up near the end. Consecutive CartPole moves are too similar to teach a network well.</li>
+<li><b>Full DQN works but wobbles</b>, as in chapter 09: good versions appear (best 474.6 for seed 0), then get worse again.</li>
+<li><b>Double DQN</b> was the only variant to reach a perfect <b>500</b> (seed 0), and had the best final and best networks on average. Honestly, its Q-values were <i>not</i> lower here (56.7 vs 55.4): on a game as simple as CartPole the over-optimism of chapter 06 is small. Double DQN's advantage was measured mostly on harder games such as Atari.</li>
+<li><b>2 seeds is not much.</b> RL results vary a lot from seed to seed (look at full DQN: 474.6 vs 256.5). Serious comparisons use 5–10+ seeds. Treat small differences here as hints, big ones (9 vs 190) as real.</li>
+</ul>

@@ -1,0 +1,34 @@
+Training DQN on CartPole for 50,000 steps
+
+  step   2500  eps 0.286  games  143  train avg(last 20)   21.6  test (greedy)  431.0
+  step   5000  eps 0.082  games  155  train avg(last 20)  133.3  test (greedy)  272.1
+  step   7500  eps 0.050  games  166  train avg(last 20)  219.1  test (greedy)  241.0
+  step  10000  eps 0.050  games  177  train avg(last 20)  223.9  test (greedy)  242.1
+  step  12500  eps 0.050  games  188  train avg(last 20)  225.4  test (greedy)  249.8
+  step  15000  eps 0.050  games  198  train avg(last 20)  232.6  test (greedy)  202.5
+  step  17500  eps 0.050  games  212  train avg(last 20)  206.1  test (greedy)  111.2
+  step  20000  eps 0.050  games  235  train avg(last 20)  108.0  test (greedy)  112.2
+  step  22500  eps 0.050  games  255  train avg(last 20)  122.0  test (greedy)  118.7
+  step  25000  eps 0.050  games  272  train avg(last 20)  145.1  test (greedy)  209.9
+  step  27500  eps 0.050  games  290  train avg(last 20)  133.7  test (greedy)  335.4
+  step  30000  eps 0.050  games  306  train avg(last 20)  148.4  test (greedy)  167.6
+  step  32500  eps 0.050  games  322  train avg(last 20)  148.9  test (greedy)  148.3
+  step  35000  eps 0.050  games  341  train avg(last 20)  128.7  test (greedy)  110.5
+  step  37500  eps 0.050  games  353  train avg(last 20)  177.0  test (greedy)  304.9
+  step  40000  eps 0.050  games  369  train avg(last 20)  171.9  test (greedy)  182.9
+  step  42500  eps 0.050  games  389  train avg(last 20)  123.1  test (greedy)  129.0
+  step  45000  eps 0.050  games  403  train avg(last 20)  157.3  test (greedy)  360.3
+  step  47500  eps 0.050  games  413  train avg(last 20)  226.6  test (greedy)  160.6
+  step  50000  eps 0.050  games  426  train avg(last 20)  232.0  test (greedy)  153.3
+
+Best network, 100 test games with no exploration: average score 472.9 (max 500)
+Training games played: 426
+
+What the network thinks (Q-values) in some states:
+  balanced, still            Q(left)    3.2   Q(right)    3.2   -> push RIGHT
+  pole leaning RIGHT         Q(left)    3.1   Q(right)    3.2   -> push RIGHT
+  pole leaning LEFT          Q(left)    3.2   Q(right)    3.2   -> push LEFT
+  pole falling right fast    Q(left)    2.6   Q(right)    2.6   -> push RIGHT
+  almost fallen right        Q(left)    2.7   Q(right)    2.8   -> push RIGHT
+
+Chart saved to cartpole_dqn.png

@@ -1,0 +1,9 @@
+setting              seed  updates  last-50 avg   exam  final entropy   time
+ent_coef = 0            0     2000        309.8  150.0          0.462    12s
+ent_coef = 0            1     2000        379.4  269.0          0.481     9s
+ent_coef = 0.01         0     2000        114.7  251.6          0.523     9s
+ent_coef = 0.01         1     2000        170.7  385.0          0.463     9s
+ent_coef = 0.1          0     2000         84.2  220.9          0.546     8s
+ent_coef = 0.1          1     2000        272.2  500.0          0.559     8s
+
+Chart saved to experiments_entropy.png

@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Value Iteration and Q-Learning</title>
+<style>
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --ink:#151B2F; --muted:#5B647A; --line:#D6DCE7;
+  --accent:#2C4BD1; --accent-soft:#E8ECFB; --gold:#A86A08; --gold-soft:#FBF3E2;
+  --good:#1E8A5A; --good-soft:#E3F3EA; --bad:#C2413A; --bad-soft:#FBE7E5; --code:#F1F3F8;
+  --f-body:"Segoe UI", system-ui, sans-serif;
+  --f-mono:Consolas, "Cascadia Mono", monospace;
+}
+@page{size:A4;margin:15mm 15mm 16mm}
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:10.6pt;line-height:1.55;margin:0}
+main{max-width:180mm;margin:0 auto}
+h1{font-size:30pt;line-height:1.05;margin:0 0 8px;font-weight:800;letter-spacing:-.01em}
+h2{font-size:19pt;line-height:1.15;margin:0 0 4px;font-weight:800;break-before:page;padding-top:2px}
+h2 .n{font-family:var(--f-mono);font-size:11pt;color:var(--accent);vertical-align:4pt;margin-right:8px}
+h3{font-size:13pt;margin:18px 0 6px;font-weight:700;break-after:avoid}
+h4{font-size:11pt;margin:12px 0 4px;break-after:avoid}
+.sub{color:var(--muted);margin:0 0 12px;font-size:11pt}
+p{margin:0 0 9px}
+ul,ol{margin:0 0 9px;padding-left:1.3em}
+li{margin-bottom:3px}
+code{font-family:var(--f-mono);font-size:.9em;background:var(--code);padding:0 4px;border-radius:3px}
+pre{font-family:var(--f-mono);font-size:8.6pt;line-height:1.45;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin:0 0 10px;white-space:pre-wrap;break-inside:avoid}
+pre .c{color:#5B647A}
+pre .k{color:var(--accent);font-weight:700}
+pre .h{background:#FFF0C2}
+.box{padding:10px 13px;margin:10px 0;border-radius:5px;break-inside:avoid}
+.box > :last-child{margin-bottom:0}
+.tag{display:block;font-family:var(--f-mono);font-size:8pt;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;font-weight:700}
+.plain{background:var(--accent-soft)} .plain .tag{color:var(--accent)}
+.key{border:2px solid var(--ink)} .key .tag{color:var(--ink)}
+.warn{background:var(--gold-soft);border:1px solid #E6CC97} .warn .tag{color:var(--gold)}
+.ok{background:var(--good-soft)} .ok .tag{color:var(--good)}
+table{border-collapse:collapse;width:100%;font-size:9.6pt;margin:6px 0 12px;break-inside:avoid}
+table.long{break-inside:auto} table.long tr{break-inside:avoid}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:8pt;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#F5F6FA}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+figure{margin:10px 0 14px;break-inside:avoid}
+figure svg{display:block;width:100%;height:auto}
+figure img{display:block;width:100%;border:1px solid var(--line);border-radius:4px}
+figcaption{font-size:9pt;color:var(--muted);margin-top:5px}
+svg text{font-family:var(--f-body);font-size:13px;fill:currentColor}
+svg .t-m{fill:#5B647A} svg .t-a{fill:#2C4BD1;font-weight:700} svg .t-g{fill:#1E8A5A;font-weight:700} svg .t-b{fill:#C2413A;font-weight:700}
+svg .t-h{font-weight:700;font-size:12px;letter-spacing:.06em}
+svg .bx{fill:#fff;stroke:#151B2F;stroke-width:1.4}
+svg .bxa{fill:#E8ECFB;stroke:#2C4BD1;stroke-width:1.6}
+svg .bxg{fill:#E3F3EA;stroke:#1E8A5A;stroke-width:1.6}
+svg .ln{fill:none;stroke:#151B2F;stroke-width:1.5}
+svg .lna{fill:none;stroke:#2C4BD1;stroke-width:2.2}
+svg .lnd{fill:none;stroke:#9AA3B9;stroke-width:1.4;stroke-dasharray:5 4}
+
+/* gridworld boards */
+.boards{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px;break-inside:avoid}
+.board{break-inside:avoid}
+.board .cap{font-family:var(--f-mono);font-size:8pt;color:var(--muted);margin-bottom:3px}
+table.gw{width:auto;border-collapse:separate;border-spacing:2px;margin:0;font-family:var(--f-mono);font-size:8pt}
+table.gw td{width:40px;height:30px;padding:0;text-align:center;vertical-align:middle;border:1px solid var(--line);border-radius:3px;line-height:1.1}
+table.gw.big td{width:62px;height:46px;font-size:9.5pt}
+table.gw.big td b{display:block;font-size:13pt;font-family:var(--f-body)}
+td.wall{background:repeating-linear-gradient(45deg,#D6DCE7 0 3px,#fff 3px 7px)}
+td.G{background:#2E9E68;color:#fff;font-weight:700} td.P{background:#D2564F;color:#fff;font-weight:700}
+td.H{background:#1F3B57;color:#fff;font-weight:700}
+td.g3{background:#8ED1AE} td.g2{background:#B9E3CB} td.g1{background:#E3F3EA} td.ng{background:#FBE7E5}
+td.new{outline:2px solid var(--accent);outline-offset:-2px}
+td.ice{background:#DDEEFF}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cover{height:240mm;display:flex;flex-direction:column;justify-content:center}
+.eyebrow{font-family:var(--f-mono);font-size:9pt;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:13pt;color:var(--muted);max-width:150mm}
+.toc{margin-top:26px;columns:2;column-gap:24px;font-size:10.5pt}
+.toc div{break-inside:avoid;padding:3px 0;border-bottom:1px solid var(--line)}
+.toc span{font-family:var(--f-mono);color:var(--accent);margin-right:8px}
+.qa{border-left:3px solid var(--accent);padding:4px 0 4px 12px;margin:0 0 12px;break-inside:avoid}
+.qa .q{font-weight:700;margin-bottom:3px}
+.qa .q::before{content:"Q. ";color:var(--accent)}
+.wrong{color:var(--bad);font-weight:700} .right{color:var(--good);font-weight:700}
+</style>
+</head>
+<body>
+<main>
+
+<!-- ═══════════════════ COVER ═══════════════════ -->
+<section class="cover">
+  <div class="eyebrow">RL From Zero · Projects 2 &amp; 3, explained</div>
+  <h1>Value Iteration<br>and Q-Learning</h1>
+  <p class="lede">The same Bellman equation, used two different ways. Learned from the code you ran: the gridworld (project 2), FrozenLake and Taxi (project 3). Every number in this booklet comes from those runs.</p>
+  <div class="toc">
+    <div><span>01</span>The big picture in one page</div>
+    <div><span>02</span>Words you need (glossary)</div>
+    <div><span>03</span>The Bellman equation, taken apart</div>
+    <div><span>04</span>Value iteration: the world and its rule book</div>
+    <div><span>05</span>Value iteration: the code, line by line</div>
+    <div><span>06</span>Value iteration: watching it run</div>
+    <div><span>07</span>Q-learning: what the agent knows</div>
+    <div><span>08</span>Q-learning: the code, line by line</div>
+    <div><span>09</span>Q-learning: how the goal's value travels back</div>
+    <div><span>10</span>FrozenLake results</div>
+    <div><span>11</span>Taxi results</div>
+    <div><span>12</span>Side by side</div>
+    <div><span>13</span>Clearing up the confusions</div>
+    <div><span>14</span>Run it yourself + cheat sheet</div>
+  </div>
+</section>
+
+<!-- ═══════════════════ 01 BIG PICTURE ═══════════════════ -->
+<h2><span class="n">01</span>The big picture in one page</h2>
+<p class="sub">If you remember only one page, remember this one.</p>
+
+<p>Both projects try to answer the same question: <strong>"In every square, which move is best?"</strong> The answer is called a <strong>policy</strong> (a plan: one arrow per square). Both use the <strong>Bellman equation</strong> to find it. The only real difference is <strong>what the agent is allowed to know at the start</strong>.</p>
+
+<figure>
+<svg viewBox="0 0 760 220" role="img" aria-label="Value iteration reads the rule book and calculates; Q-learning plays the game and learns; both end with a plan">
+  <defs><marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <text x="20" y="20" class="t-h t-a">PROJECT 2 · VALUE ITERATION  (model-based: has the rule book)</text>
+  <rect x="20" y="32" width="190" height="58" rx="5" class="bxa"/>
+  <text x="115" y="56" text-anchor="middle" font-weight="700">Rule book GIVEN</text>
+  <text x="115" y="76" text-anchor="middle" class="t-m">transitions(s, a)</text>
+  <line x1="210" y1="61" x2="268" y2="61" class="ln" marker-end="url(#ar1)"/><text x="239" y="53" text-anchor="middle" class="t-m">reads</text>
+  <rect x="270" y="32" width="230" height="58" rx="5" class="bx"/>
+  <text x="385" y="56" text-anchor="middle" font-weight="700">Bellman on EVERY square,</text>
+  <text x="385" y="76" text-anchor="middle">every action, every slide</text>
+  <line x1="500" y1="61" x2="558" y2="61" class="ln" marker-end="url(#ar1)"/><text x="529" y="53" text-anchor="middle" class="t-m">repeat</text>
+  <rect x="560" y="32" width="180" height="58" rx="5" class="bxg"/>
+  <text x="650" y="56" text-anchor="middle" font-weight="700">PLAN</text>
+  <text x="650" y="76" text-anchor="middle">V(s) + best arrow</text>
+
+  <text x="20" y="130" class="t-h t-a">PROJECT 3 · Q-LEARNING  (model-free: NO rule book)</text>
+  <rect x="20" y="142" width="190" height="58" rx="5" class="bx"/>
+  <text x="115" y="166" text-anchor="middle" font-weight="700">Only the game</text>
+  <text x="115" y="186" text-anchor="middle" class="t-m">env.step(a) → s2, r</text>
+  <line x1="210" y1="171" x2="268" y2="171" class="ln" marker-end="url(#ar1)"/><text x="239" y="163" text-anchor="middle" class="t-m">plays</text>
+  <rect x="270" y="142" width="230" height="58" rx="5" class="bx"/>
+  <text x="385" y="166" text-anchor="middle" font-weight="700">Bellman on the ONE move</text>
+  <text x="385" y="186" text-anchor="middle">just made: nudge Q[s, a]</text>
+  <line x1="500" y1="171" x2="558" y2="171" class="ln" marker-end="url(#ar1)"/><text x="529" y="163" text-anchor="middle" class="t-m">repeat</text>
+  <rect x="560" y="142" width="180" height="58" rx="5" class="bxg"/>
+  <text x="650" y="166" text-anchor="middle" font-weight="700">PLAN</text>
+  <text x="650" y="186" text-anchor="middle">Q(s, a) + best arrow</text>
+</svg>
+<figcaption>Same destination (a plan), different starting point. Value iteration calculates on paper with the rules; Q-learning discovers by playing without them.</figcaption>
+</figure>
+
+<div class="box key"><span class="tag">The one sentence</span>
+<p><strong>Value iteration</strong> is <em>given</em> the rule book, so it calculates every square, every action and every possible slide at once, without ever playing. <strong>Q-learning</strong> is <em>not</em> given the rules, so it plays, and after each real move it uses Bellman to correct one number. Thousands of games later it reaches the same plan.</p>
+</div>
+
+<h3>An everyday picture</h3>
+<table>
+<tr><th></th><th>Value iteration</th><th>Q-learning</th></tr>
+<tr><td>Like…</td><td>Google Maps: it has the full map and calculates the route without driving</td><td>A person in a new city with no map: walks around, remembers which streets led somewhere good</td></tr>
+<tr><td>Starts with</td><td>the rules (map, slip chances, rewards)</td><td>nothing, just "there are 16 states and 4 actions"</td></tr>
+<tr><td>Ends with</td><td>the best plan</td><td>the best plan (almost exactly)</td></tr>
+<tr><td>In your runs</td><td>gridworld solved in <b>9 sweeps</b></td><td>FrozenLake solved in <b>2,000 games</b>; slippery in 20,000</td></tr>
+</table>
+
+<div class="box plain"><span class="tag">Why bother with Q-learning?</span>
+<p>Because in the real world there is almost never a rule book. Nobody can write <code>transitions()</code> for a walking robot, a video game seen as pixels, or a stock market. Q-learning (and its big brothers DQN and PPO) works when you <em>don't</em> know the rules, which is the situation RL is really for.</p>
+</div>
+
+<!-- ═══════════════════ 02 GLOSSARY ═══════════════════ -->
+<h2><span class="n">02</span>Words you need</h2>
+<p class="sub">Every term used in this booklet, with where it lives in your code.</p>
+
+<table class="long">
+<tr><th style="width:24%">Term</th><th>Meaning in plain words</th><th style="width:26%">In your code</th></tr>
+<tr><td><b>State</b> (s)</td><td>Where you are right now. One square of the grid; in Taxi, the whole situation (taxi position + passenger + destination).</td><td><code>s</code>, e.g. <code>(1,3)</code> or <code>14</code></td></tr>
+<tr><td><b>Next state</b> (s′)</td><td>Where you land after a move.</td><td><code>s2</code></td></tr>
+<tr><td><b>Action</b> (a)</td><td>A move you can choose: up / down / left / right (Taxi adds pickup, dropoff).</td><td><code>a</code>, <code>ACTIONS</code></td></tr>
+<tr><td><b>Reward</b> (r)</td><td>Points received for arriving somewhere. Goal +1, pit −1, ordinary step −0.04 (gridworld).</td><td><code>r</code>, <code>reward()</code></td></tr>
+<tr><td><b>Episode</b> / game</td><td>One play from start until it ends.</td><td>one loop of <code>for ep in range(episodes)</code></td></tr>
+<tr><td><b>Terminal state</b></td><td>A state where the game ends (goal, pit, hole). It has no future, so its value is 0.</td><td><code>is_terminal()</code>, <code>terminated</code></td></tr>
+<tr><td><b>Terminated vs truncated</b></td><td><i>Terminated</i>: the game really ended (goal/hole). <i>Truncated</i>: stopped by a time limit (FrozenLake 100 steps, Taxi 200). Only "terminated" means "no future".</td><td><code>(not terminated)</code> in the target</td></tr>
+<tr><td><b>Transition probability</b> P(s′|s,a)</td><td>"If I aim this way from here, what's the chance I land there?" Part of the world's rules.</td><td><code>transitions()</code>, <code>env.unwrapped.P</code></td></tr>
+<tr><td><b>Rule book / model</b></td><td>The full rules: all transition probabilities and rewards.</td><td><code>gridworld.py</code></td></tr>
+<tr><td><b>Model-based</b> vs <b>model-free</b></td><td>Model-based methods use the rule book (value iteration). Model-free methods learn from experience only (Q-learning, DQN, PPO).</td><td>project 2 vs project 3</td></tr>
+<tr><td><b>Discount</b> γ (gamma)</td><td>How much the future counts. γ = 0.9 means a reward one step later is worth 90%.</td><td><code>gamma</code></td></tr>
+<tr><td><b>Value</b> V(s)</td><td>"How good is it to stand here?" = all the reward you can still collect from here, playing well. <b>One number per square.</b></td><td><code>V</code> (a dict)</td></tr>
+<tr><td><b>Q-value</b> Q(s,a)</td><td>"How good is it to do action a here, then play well?" <b>One number per square per action.</b></td><td><code>Q</code> (array 16×4)</td></tr>
+<tr><td><b>Policy</b> π</td><td>The plan: which action to take in each state. The <i>output</i> of both methods.</td><td><code>greedy_policy()</code>, <code>argmax(Q[s])</code></td></tr>
+<tr><td><b>Greedy</b></td><td>Always choose the action with the biggest number.</td><td><code>np.argmax</code></td></tr>
+<tr><td><b>max</b> vs <b>argmax</b></td><td><i>max</i> gives the biggest number (the value). <i>argmax</i> gives <b>which action</b> had it (the move).</td><td><code>np.max</code> / <code>np.argmax</code></td></tr>
+<tr><td><b>Bellman equation</b></td><td>Value here = reward now + γ × value of where you land, with the best action. Section 03.</td><td><code>q_value()</code>, <code>target</code></td></tr>
+<tr><td><b>Sweep</b></td><td>One pass of Bellman over <b>every</b> square (value iteration only).</td><td><code>bellman_sweep()</code></td></tr>
+<tr><td><b>Biggest change</b> / θ (theta)</td><td>The largest amount any square changed in a sweep. When it drops below θ = 0.000001, the values have settled: stop.</td><td><code>biggest_change</code>, <code>theta</code></td></tr>
+<tr><td><b>Convergence</b></td><td>The numbers have stopped changing, so the plan is final.</td><td><code>if change &lt; theta: break</code></td></tr>
+<tr><td><b>Target</b></td><td>Q-learning's "what this move turned out to be worth": r + γ · max Q[s2].</td><td><code>target</code></td></tr>
+<tr><td><b>Surprise</b> (TD error)</td><td>target − old guess. Positive: better than expected. Negative: worse.</td><td><code>target - Q[s, a]</code></td></tr>
+<tr><td><b>Learning rate</b> α (alpha)</td><td>How far to move toward the target each time. α = 0.1 moves 10% of the way.</td><td><code>alpha</code></td></tr>
+<tr><td><b>Exploration</b> ε (epsilon)</td><td>Chance of a random move instead of the best one. Without it, unvisited squares never get learned.</td><td><code>eps</code>, <code>epsilon_greedy()</code></td></tr>
+<tr><td><b>ε-decay</b></td><td>Explore a lot at first, less later. ε × 0.999 after each game, down to 0.05.</td><td><code>eps_decay</code>, <code>eps_end</code></td></tr>
+<tr><td><b>Exploit</b></td><td>Use what you already know (take the best action).</td><td>the <code>else</code> branch of ε-greedy</td></tr>
+<tr><td><b>Bootstrapping</b></td><td>Updating a guess using another guess (Q[s2]) instead of waiting to see the real final result.</td><td><code>np.max(Q[s2])</code></td></tr>
+<tr><td><b>Monte Carlo</b></td><td>A different method: play the whole game, then update every visited square with the real total. (Not what Q-learning does.)</td><td>not in these projects</td></tr>
+</table>
+
+<!-- ═══════════════════ 03 BELLMAN ═══════════════════ -->
+<h2><span class="n">03</span>The Bellman equation, taken apart</h2>
+<p class="sub">What goes in, what comes out, and what it never calculates.</p>
+
+<pre style="font-size:9.6pt;line-height:1.5">
+V(s)  =  max over actions a  of   Σ   P(s′ | s, a) · [  r   +  γ · V(s′) ]
+ ▲         ▲                           ▲                ▲          ▲
+ OUTPUT    YOU choose                  GIVEN            GIVEN      CURRENT GUESS
+ a number  (try every action,          by the rules     by the     of where you land
+           keep the biggest)           (the dice)       rules      (from last sweep)
+</pre>
+
+<table>
+<tr><th>Part</th><th>Is it calculated?</th><th>Where it comes from</th></tr>
+<tr><td>P(s′|s,a), the slide chances</td><td class="wrong">No, never</td><td>The world's rules (60/20/20 in the gridworld, 1/3 each in FrozenLake). They are <i>weights</i> in an average.</td></tr>
+<tr><td>r, the reward</td><td class="wrong">No</td><td>The world's rules</td></tr>
+<tr><td>V(s′), the value of where you land</td><td>Read, not calculated here</td><td>The current table (from the previous sweep, or previous games)</td></tr>
+<tr><td><b>V(s)</b>, the value here</td><td class="right">YES, this is the answer</td><td>Bellman</td></tr>
+<tr><td>The best action</td><td class="right">Falls out for free</td><td>The action that won the <code>max</code> (that's <code>argmax</code>)</td></tr>
+</table>
+
+<h3>What does "r + γ · V(s′)" return?</h3>
+<p><strong>A number, not an action or a state.</strong> It is the score of one move: "reward now + everything I can collect after." Note it is γ × the <b>value</b> of the next state, not × the next reward. V(s′) already contains the whole future:</p>
+<pre>V(s′) = r′ + γ·r″ + γ²·r‴ + …   so   r + γ·V(s′) = r + γ·r′ + γ²·r″ + …  (the whole future)</pre>
+
+<h3>Real example, computed by your code (gridworld, normal floor, square (1,3))</h3>
+<div class="two">
+<div>
+<table class="gw big">
+<tr><td class="g2">0.73</td><td class="g3">0.86</td><td class="g3">1.00</td><td class="G">GOAL</td></tr>
+<tr><td class="wall"></td><td class="g2">0.73</td><td class="new"><b>?</b>(1,3)</td><td class="P">PIT</td></tr>
+<tr><td></td><td></td><td class="wall"></td><td></td></tr>
+</table>
+<p style="font-size:9pt;color:var(--muted);margin-top:4px">Right part of the board. (1,3) = row 1, col 3, counting from 0. The playground calls it "row 2, col 4" (counting from 1).</p>
+</div>
+<div>
+<pre>
+up    = −0.04 + 0.9 × 1.00 = <b>+0.860</b>  ← best
+right = −1.00 + 0.9 × 0.00 = −1.000  (pit)
+down  = −0.04 + 0.9 × 0.86 = +0.734  (wall)
+left  = −0.04 + 0.9 × 0.73 = +0.621
+
+max    → V(1,3) = 0.86   (a NUMBER)
+argmax → "up"            (the ACTION)
+</pre>
+</div>
+</div>
+<figure style="margin-top:4px">
+<svg viewBox="0 0 760 108" role="img" aria-label="Loop: state, compute a number per action, pick biggest, action, game gives next state">
+  <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="10" y="20" width="110" height="46" rx="5" class="bx"/><text x="65" y="48" text-anchor="middle" font-weight="700">state s</text>
+  <line x1="120" y1="43" x2="168" y2="43" class="ln" marker-end="url(#ar3)"/>
+  <rect x="170" y="20" width="250" height="46" rx="5" class="bxa"/><text x="295" y="40" text-anchor="middle" font-weight="700">for EACH action: a number</text><text x="295" y="58" text-anchor="middle" class="t-m">r + γ·V(s′)</text>
+  <line x1="420" y1="43" x2="468" y2="43" class="ln" marker-end="url(#ar3)"/>
+  <rect x="470" y="20" width="130" height="46" rx="5" class="bx"/><text x="535" y="48" text-anchor="middle" font-weight="700">pick biggest</text>
+  <line x1="600" y1="43" x2="648" y2="43" class="ln" marker-end="url(#ar3)"/>
+  <rect x="650" y="20" width="100" height="46" rx="5" class="bxg"/><text x="700" y="48" text-anchor="middle" font-weight="700">action</text>
+  <path d="M700,66 V100 H65 V68" class="ln" marker-end="url(#ar3)"/>
+  <text x="380" y="94" text-anchor="middle" class="t-m">the GAME moves you → new state s′</text>
+</svg>
+<figcaption>Four numbers, one per action: the biggest becomes the square's value, its action becomes the arrow. The next <b>state</b> is decided by the game, not by Bellman.</figcaption>
+</figure>
+
+<!-- ═══════════════════ 04 VI WORLD ═══════════════════ -->
+<h2><span class="n">04</span>Value iteration: the world and its rule book</h2>
+<p class="sub">Project 2 · <code>rl_projects/02_gridworld_value_iteration/gridworld.py</code></p>
+
+<div class="two">
+<div>
+<table class="gw big">
+<tr><td>(0,0)</td><td>(0,1)</td><td>(0,2)</td><td>(0,3)</td><td class="G">GOAL<br>+1</td></tr>
+<tr><td>(1,0)</td><td class="wall"></td><td>(1,2)</td><td>(1,3)</td><td class="P">PIT<br>−1</td></tr>
+<tr><td>(2,0)</td><td class="wall"></td><td>(2,2)</td><td class="wall"></td><td>(2,4)</td></tr>
+<tr><td style="background:#E8ECFB"><b>S</b>(3,0)</td><td>(3,1)</td><td>(3,2)</td><td>(3,3)</td><td>(3,4)</td></tr>
+</table>
+</div>
+<div>
+<p><b>The rules we wrote:</b></p>
+<ul>
+<li>20 cells − 3 walls = <b>17 states</b>; goal and pit end the game, so <b>15 playable</b> squares.</li>
+<li>Goal +1, pit −1, every other step −0.04 (so wandering costs a little).</li>
+<li>Bumping a wall or the edge: you stay put.</li>
+<li><b>Slip rule</b> (one rule for every square): <code>slip = 0.4</code> → 60% where you aim, 20% slide to each side.</li>
+</ul>
+</div>
+</div>
+
+<h3>The rule book is a function: <code>transitions(s, a)</code></h3>
+<p>We didn't type a table of probabilities for every square. We wrote a few general rules, and this function works out the answer for any square and action on demand:</p>
+<pre><span class="k">def</span> transitions(self, s, a):
+    <span class="c">"""P(s' | s, a) and R as a list of (probability, next_state, reward)."""</span>
+    <span class="k">if</span> self.slip == 0:
+        outcomes = [(1.0, a)]                                  <span class="c"># normal floor: always where you aim</span>
+    <span class="k">else</span>:
+        left_of, right_of = (a - 1) % 4, (a + 1) % 4           <span class="c"># the two sideways directions</span>
+        outcomes = [(1 - self.slip, a), (self.slip / 2, left_of), (self.slip / 2, right_of)]
+    result = []
+    <span class="k">for</span> p, actual <span class="k">in</span> outcomes:
+        s2 = self._move(s, actual)                             <span class="c"># where that direction takes you (walls → stay)</span>
+        result.append((p, s2, self.reward(s2)))               <span class="c"># reward for ARRIVING at s2</span>
+    <span class="k">return</span> result</pre>
+
+<p><b>Ask the rule book a question</b> (slippery floor, the square next to the pit, aiming up):</p>
+<pre>transitions((1,3), up)   = [ (0.6, (0,3), −0.04),     60%: up, as aimed
+                             (0.2, (1,2), −0.04),     20%: slide left
+                             (0.2, (1,4), −1.00) ]    20%: slide right → INTO THE PIT
+
+transitions((1,3), left) = [ (0.6, (1,2), −0.04),     60%: left, as aimed
+                             (0.2, (1,3), −0.04),     20%: slide down → wall → stay
+                             (0.2, (0,3), −0.04) ]    20%: slide up      → never the pit!</pre>
+
+<div class="box plain"><span class="tag">Who gave the rule book, and when?</span>
+<p><b>We</b> wrote it, in <code>gridworld.py</code>. Value iteration reads it every time it calculates a Q-value (next section, the <code>env.transitions(s, a)</code> call). The <b>policy</b> was <i>not</i> given; it is the <b>output</b>.</p>
+</div>
+
+<!-- ═══════════════════ 05 VI CODE ═══════════════════ -->
+<h2><span class="n">05</span>Value iteration: the code, line by line</h2>
+<p class="sub"><code>value_iteration.py</code>: four small functions, and the whole algorithm fits on half a page.</p>
+
+<pre><span class="k">def</span> q_value(env, V, s, a, gamma):                                     <span class="c"># ① score ONE action</span>
+    <span class="k">return</span> sum(p * (r + gamma * V[s2]) <span class="k">for</span> p, s2, r <span class="k">in</span> <span class="h">env.transitions(s, a)</span>)
+
+<span class="k">def</span> bellman_sweep(env, V, gamma):                                     <span class="c"># ② one pass over EVERY square</span>
+    new_V = dict(V)
+    biggest_change = 0.0
+    <span class="k">for</span> s <span class="k">in</span> env.states:
+        <span class="k">if</span> env.is_terminal(s):
+            <span class="k">continue</span>                                     <span class="c"># goal/pit: no future, value stays 0</span>
+        new_V[s] = max(q_value(env, V, s, a, gamma) <span class="k">for</span> a <span class="k">in</span> ACTIONS)
+        biggest_change = max(biggest_change, abs(new_V[s] - V[s]))
+    <span class="k">return</span> new_V, biggest_change
+
+<span class="k">def</span> greedy_policy(env, V, gamma):                                     <span class="c"># ③ turn values into arrows</span>
+    <span class="k">return</span> {s: max(ACTIONS, key=<span class="k">lambda</span> a: q_value(env, V, s, a, gamma))
+            <span class="k">for</span> s <span class="k">in</span> env.states <span class="k">if not</span> env.is_terminal(s)}
+
+<span class="k">def</span> value_iteration(env, gamma=0.9, theta=1e-6):                     <span class="c"># ④ the whole algorithm</span>
+    V = {s: 0.0 <span class="k">for</span> s <span class="k">in</span> env.states}                  <span class="c"># start knowing nothing</span>
+    <span class="k">while True</span>:
+        V, change = bellman_sweep(env, V, gamma)
+        <span class="k">if</span> change &lt; theta:                            <span class="c"># settled? stop</span>
+            <span class="k">break</span>
+    <span class="k">return</span> V, greedy_policy(env, V, gamma)</pre>
+
+<table>
+<tr><th style="width:18%">Piece</th><th>What it does</th><th style="width:28%">Bellman part</th></tr>
+<tr><td>① <code>q_value</code></td><td>Asks the rule book for every possible landing spot, and averages <code>reward + γ·V(landing)</code> weighted by its probability. <b>The highlighted call is where the rule book is read.</b></td><td>Σ P(s′|s,a)·[r + γ·V(s′)]</td></tr>
+<tr><td>② <code>bellman_sweep</code></td><td>For every square: score all 4 actions, keep the biggest. Also measures the biggest change. Uses the <i>old</i> V for all squares (writes into <code>new_V</code>), so every square in a sweep sees the same snapshot.</td><td>max over a</td></tr>
+<tr><td>③ <code>greedy_policy</code></td><td>After values settle, for every square pick the action with the biggest score. <b>This is the policy.</b></td><td>argmax over a</td></tr>
+<tr><td>④ <code>value_iteration</code></td><td>Start at 0 everywhere, sweep, sweep, sweep… until the biggest change &lt; θ.</td><td>repeat until converged</td></tr>
+</table>
+
+<figure>
+<svg viewBox="0 0 760 140" role="img" aria-label="Value iteration flow: start V=0, sweep all squares, check biggest change, loop or output policy">
+  <defs><marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="10" y="62" width="130" height="56" rx="5" class="bx"/><text x="75" y="86" text-anchor="middle" font-weight="700">V = 0</text><text x="75" y="105" text-anchor="middle" class="t-m">everywhere</text>
+  <line x1="140" y1="90" x2="178" y2="90" class="ln" marker-end="url(#ar5)"/>
+  <rect x="180" y="62" width="240" height="56" rx="5" class="bxa"/><text x="300" y="84" text-anchor="middle" font-weight="700">SWEEP: every square s</text><text x="300" y="104" text-anchor="middle" class="t-m">V(s) = max over a of Σ p·[r + γ·V(s′)]</text>
+  <line x1="420" y1="90" x2="458" y2="90" class="ln" marker-end="url(#ar5)"/>
+  <rect x="460" y="62" width="150" height="56" rx="5" class="bx"/><text x="535" y="84" text-anchor="middle" font-weight="700">biggest change</text><text x="535" y="104" text-anchor="middle" font-weight="700">&lt; θ ?</text>
+  <line x1="610" y1="90" x2="638" y2="90" class="ln" marker-end="url(#ar5)"/><text x="624" y="82" text-anchor="middle" class="t-g">yes</text>
+  <rect x="640" y="62" width="110" height="56" rx="5" class="bxg"/><text x="695" y="84" text-anchor="middle" font-weight="700">policy =</text><text x="695" y="104" text-anchor="middle">argmax arrows</text>
+  <path d="M535,62 V26 H300 V60" class="ln" marker-end="url(#ar5)"/><text x="418" y="20" text-anchor="middle" class="t-b">no → sweep again</text>
+</svg>
+<figcaption>The value iteration loop. It never plays a single game.</figcaption>
+</figure>
+
+
+<!-- ═══════════════════ 06 VI RUN ═══════════════════ -->
+<h2><span class="n">06</span>Value iteration: watching it run</h2>
+<p class="sub">Real output of <code>python experiment.py</code>, normal floor, γ = 0.9.</p>
+
+<div class="boards">
+<div class="board"><div class="cap">sweep 1 · change 1.000</div>
+<table class="gw">
+<tr><td class="ng">−.04</td><td class="ng">−.04</td><td class="ng">−.04</td><td class="g3 new">1.00</td><td class="G">G</td></tr>
+<tr><td class="ng">−.04</td><td class="wall"></td><td class="ng">−.04</td><td class="ng">−.04</td><td class="P">P</td></tr>
+<tr><td class="ng">−.04</td><td class="wall"></td><td class="ng">−.04</td><td class="wall"></td><td class="ng">−.04</td></tr>
+<tr><td class="ng">−.04</td><td class="ng">−.04</td><td class="ng">−.04</td><td class="ng">−.04</td><td class="ng">−.04</td></tr>
+</table></div>
+<div class="board"><div class="cap">sweep 2 · change 0.900</div>
+<table class="gw">
+<tr><td class="ng">−.08</td><td class="ng">−.08</td><td class="g3 new">.86</td><td class="g3">1.00</td><td class="G">G</td></tr>
+<tr><td class="ng">−.08</td><td class="wall"></td><td class="ng">−.08</td><td class="g3 new">.86</td><td class="P">P</td></tr>
+<tr><td class="ng">−.08</td><td class="wall"></td><td class="ng">−.08</td><td class="wall"></td><td class="ng">−.08</td></tr>
+<tr><td class="ng">−.08</td><td class="ng">−.08</td><td class="ng">−.08</td><td class="ng">−.08</td><td class="ng">−.08</td></tr>
+</table></div>
+<div class="board"><div class="cap">sweep 3 · change 0.810</div>
+<table class="gw">
+<tr><td class="ng">−.11</td><td class="g2 new">.73</td><td class="g3">.86</td><td class="g3">1.00</td><td class="G">G</td></tr>
+<tr><td class="ng">−.11</td><td class="wall"></td><td class="g2 new">.73</td><td class="g3">.86</td><td class="P">P</td></tr>
+<tr><td class="ng">−.11</td><td class="wall"></td><td class="ng">−.11</td><td class="wall"></td><td class="ng">−.11</td></tr>
+<tr><td class="ng">−.11</td><td class="ng">−.11</td><td class="ng">−.11</td><td class="ng">−.11</td><td class="ng">−.11</td></tr>
+</table></div>
+<div class="board"><div class="cap">sweep 4 · change 0.729</div>
+<table class="gw">
+<tr><td class="g2 new">.62</td><td class="g2">.73</td><td class="g3">.86</td><td class="g3">1.00</td><td class="G">G</td></tr>
+<tr><td class="ng">−.14</td><td class="wall"></td><td class="g2">.73</td><td class="g3">.86</td><td class="P">P</td></tr>
+<tr><td class="ng">−.14</td><td class="wall"></td><td class="g2 new">.62</td><td class="wall"></td><td class="ng">−.14</td></tr>
+<tr><td class="ng">−.14</td><td class="ng">−.14</td><td class="ng">−.14</td><td class="ng">−.14</td><td class="ng">−.14</td></tr>
+</table></div>
+</div>
+
+<h3>What you are seeing</h3>
+<ul>
+<li><b>Every sweep calculates ALL squares</b>, but only squares that can "see" a known value get a good number. Squares far away just collect −0.04 per sweep, because their neighbours still know nothing.</li>
+<li><b>The good news ripples backwards one square per sweep</b> (blue outlines): sweep 1 the square next to the goal, sweep 2 the next ring, and so on. Each value is 0.9 × the one after it, minus 0.04: 1.00 → 0.86 → 0.73 → 0.62.</li>
+<li><b>"Biggest change"</b> is the largest amount any single square moved in that sweep: 1.000, 0.900, 0.810, 0.729. It shrinks by ×0.9 (= γ) each sweep. When it falls below θ = 0.000001 the values have settled. Here that took <b>9 sweeps</b>.</li>
+<li><b>Work per sweep:</b> 15 playable squares × 4 actions = <b>60 Bellman scores</b> (on ice each averages 3 slides). The slippery run needed 49 sweeps ≈ 2,940 scores: a fraction of a second, because it's just arithmetic.</li>
+</ul>
+
+<h3>Final plan (converged after 9 sweeps)</h3>
+<table class="gw big">
+<tr><td class="g2"><b>→</b>.62</td><td class="g2"><b>→</b>.73</td><td class="g3"><b>→</b>.86</td><td class="g3"><b>→</b>1.00</td><td class="G">GOAL</td></tr>
+<tr><td class="g2"><b>↑</b>.52</td><td class="wall"></td><td class="g2"><b>↑</b>.73</td><td class="g3"><b>↑</b>.86</td><td class="P">PIT</td></tr>
+<tr><td class="g1"><b>↑</b>.43</td><td class="wall"></td><td class="g2"><b>↑</b>.62</td><td class="wall"></td><td class="g1"><b>↓</b>.27</td></tr>
+<tr><td class="g1"><b>↑</b>.34<br></td><td class="g1"><b>→</b>.43</td><td class="g2"><b>↑</b>.52</td><td class="g1"><b>←</b>.43</td><td class="g1"><b>←</b>.34</td></tr>
+</table>
+
+<h3>Slippery floor: the plan changes</h3>
+<p>With <code>slip = 0.4</code> it needed 49 sweeps, and exactly one arrow changed: at (1,3), next to the pit, <b>up → left</b>. Your code printed why (slip makes each action a 3-outcome average):</p>
+<pre>up    = 0.6·[−0.04 + 0.9·0.80] + 0.2·[−0.04 + 0.9·0.41] + 0.2·[<b>−1.00</b> + 0.9·0.00] = +0.274
+right = 0.6·[−1.00 + 0.9·0.00] + 0.2·[−0.04 + 0.9·0.80] + 0.2·[−0.04 + 0.9·0.40] = −0.400
+down  = 0.6·[−0.04 + 0.9·0.40] + 0.2·[−1.00 + 0.9·0.00] + 0.2·[−0.04 + 0.9·0.41] = +0.058
+left  = 0.6·[−0.04 + 0.9·0.41] + 0.2·[−0.04 + 0.9·0.40] + 0.2·[−0.04 + 0.9·0.80] = <b>+0.399  ← best</b></pre>
+<p>"Up" has a 20% chance to slide into the pit (the −1.00 term), so the safer "left", which can never reach the pit, wins. Playing 10,000 real games on the slippery floor proved it:</p>
+<table>
+<tr><th>Plan used on the slippery floor</th><th class="n">Reached goal</th><th class="n">Fell in pit</th><th class="n">Avg steps</th></tr>
+<tr><td>plan made for the normal floor</td><td class="n">90.6%</td><td class="n">9.4%</td><td class="n">12.5</td></tr>
+<tr><td>plan made for the slippery floor</td><td class="n"><b>100.0%</b></td><td class="n"><b>0.0%</b></td><td class="n">14.0</td></tr>
+</table>
+<figure><img src="file:///D:/Langchain/rl_projects/02_gridworld_value_iteration/results.png" alt="Gridworld values and arrows on normal and slippery floor"><figcaption><code>results.png</code>: values drop on ice (less certain to reach the goal), and (1,3) switches from ↑ to ←.</figcaption></figure>
+
+<!-- ═══════════════════ 07 QL KNOWS ═══════════════════ -->
+<h2><span class="n">07</span>Q-learning: what the agent knows</h2>
+<p class="sub">Project 3 · <code>rl_projects/03_frozenlake_taxi_qlearning/</code></p>
+
+<div class="two">
+<div>
+<table class="gw big">
+<tr><td class="ice"><b>S</b>0</td><td class="ice">1</td><td class="ice">2</td><td class="ice">3</td></tr>
+<tr><td class="ice">4</td><td class="H">H 5</td><td class="ice">6</td><td class="H">H 7</td></tr>
+<tr><td class="ice">8</td><td class="ice">9</td><td class="ice">10</td><td class="H">H 11</td></tr>
+<tr><td class="H">H 12</td><td class="ice">13</td><td class="ice">14</td><td class="G">G 15</td></tr>
+</table>
+<p style="font-size:9pt;color:var(--muted);margin-top:4px">FrozenLake 4×4. Reward +1 only for reaching G; holes end the game with 0. Actions: 0 left, 1 down, 2 right, 3 up. Slippery: 1/3 where you aim, 1/3 each sideways.</p>
+</div>
+<div>
+<table>
+<tr><th>Does the agent know…</th><th>Proj 2</th><th>Proj 3</th></tr>
+<tr><td>where the goal is?</td><td class="right">yes</td><td class="wrong">no</td></tr>
+<tr><td>where the holes are?</td><td class="right">yes</td><td class="wrong">no</td></tr>
+<tr><td>what "right" does?</td><td class="right">yes</td><td class="wrong">no</td></tr>
+<tr><td>that it's a 4×4 grid?</td><td class="right">yes</td><td class="wrong">no</td></tr>
+<tr><td>the slip chances?</td><td class="right">yes</td><td class="wrong">no</td></tr>
+<tr><td>the rewards?</td><td class="right">yes</td><td class="wrong">no</td></tr>
+<tr><td>there are 16 states, 4 actions</td><td class="right">yes</td><td class="right">yes, that's ALL</td></tr>
+</table>
+</div>
+</div>
+
+<p>To the Q-learning agent, the game looks like this, and nothing more:</p>
+<pre>"I'm in state 0. I pressed action 2. Now I'm in state 1, reward 0."
+"I'm in state 1. I pressed action 1. Now I'm in state 5, reward 0, game over."   ← it doesn't know 5 is a "hole"</pre>
+<p>It just learns that going to state 5 leads to nothing good. That's why the <b>same <code>q_learning.py</code> worked on Taxi without a single change</b>: it never needs to know what a lake or a taxi is, only state numbers, action numbers and rewards.</p>
+
+<div class="box plain"><span class="tag">FrozenLake has a rule book too, but it's hidden</span>
+<p>The Gymnasium authors wrote FrozenLake's rules (<code>env.unwrapped.P</code>). Inside <code>env.step()</code>, the game secretly rolls the dice using them. <b>Q-learning never reads them.</b> The one exception is Part 3 of <code>frozen_lake.py</code>, where we deliberately peeked to build an answer key with value iteration.</p>
+</div>
+
+<h3>Why Q(s,a) and not V(s)?</h3>
+<p>With V you'd only know "square 14 is good". To pick a move you'd need to know <i>which action leads to which square</i>, and that's the rule book you don't have. Q stores the answer per action directly: "from 14, <b>right</b> is worth 1.00". So you can pick the best move by just looking at a row of the table. That's why Q is a 16 × 4 table (64 numbers) for FrozenLake and 500 × 6 (3,000 numbers) for Taxi.</p>
+
+<h3>Value iteration vs Q-learning in one picture</h3>
+<figure>
+<svg viewBox="0 0 760 210" role="img" aria-label="Value iteration averages all three possible outcomes weighted by probability; Q-learning learns from only the one outcome that happened">
+  <text x="185" y="18" text-anchor="middle" class="t-h t-a">VALUE ITERATION</text>
+  <circle cx="185" cy="45" r="16" class="bx"/><text x="185" y="50" text-anchor="middle">s</text>
+  <line x1="185" y1="61" x2="185" y2="88" class="ln"/><circle cx="185" cy="94" r="6" fill="#151B2F"/><text x="198" y="98" class="t-m">aim up</text>
+  <line x1="185" y1="100" x2="75" y2="150" class="ln"/><line x1="185" y1="100" x2="185" y2="150" class="ln"/><line x1="185" y1="100" x2="295" y2="150" class="ln"/>
+  <text x="112" y="125" class="t-a">0.6</text><text x="190" y="132" class="t-a">0.2</text><text x="245" y="125" class="t-a">0.2</text>
+  <circle cx="75" cy="164" r="14" class="bx"/><circle cx="185" cy="164" r="14" class="bx"/><circle cx="295" cy="164" r="14" class="bx"/>
+  <text x="75" y="169" text-anchor="middle" font-size="11">s′₁</text><text x="185" y="169" text-anchor="middle" font-size="11">s′₂</text><text x="295" y="169" text-anchor="middle" font-size="11">s′₃</text>
+  <text x="185" y="200" text-anchor="middle">averages ALL outcomes, weighted by p</text>
+
+  <line x1="380" y1="10" x2="380" y2="205" class="lnd"/>
+
+  <text x="575" y="18" text-anchor="middle" class="t-h t-a">Q-LEARNING</text>
+  <circle cx="575" cy="45" r="16" class="bx"/><text x="575" y="50" text-anchor="middle">s</text>
+  <line x1="575" y1="61" x2="575" y2="88" class="ln"/><circle cx="575" cy="94" r="6" fill="#151B2F"/><text x="588" y="98" class="t-m">aim up</text>
+  <line x1="575" y1="100" x2="465" y2="150" class="lnd"/><line x1="575" y1="100" x2="575" y2="150" class="lna"/><line x1="575" y1="100" x2="685" y2="150" class="lnd"/>
+  <text x="585" y="132" class="t-a">happened</text>
+  <circle cx="465" cy="164" r="14" fill="#fff" stroke="#9AA3B9" stroke-dasharray="3 3"/><circle cx="575" cy="164" r="14" class="bxa"/><circle cx="685" cy="164" r="14" fill="#fff" stroke="#9AA3B9" stroke-dasharray="3 3"/>
+  <text x="575" y="169" text-anchor="middle" font-size="11">s2</text>
+  <text x="575" y="200" text-anchor="middle">learns from the ONE outcome that happened</text>
+</svg>
+<figcaption>Q-learning never sees the probabilities. But because the ice really does slide 1/3 of the time, after many tries its small nudges average out with those same weights. The probabilities get "baked into" the Q-values.</figcaption>
+</figure>
+
+<!-- ═══════════════════ 08 QL CODE ═══════════════════ -->
+<h2><span class="n">08</span>Q-learning: the code, line by line</h2>
+<p class="sub"><code>q_learning.py</code>: shared by FrozenLake and Taxi.</p>
+
+<h3>① Choosing a move: ε-greedy</h3>
+<pre><span class="k">def</span> epsilon_greedy(Q, s, eps, rng):
+    <span class="k">if</span> rng.random() &lt; eps:
+        <span class="k">return</span> int(rng.integers(Q.shape[1]))         <span class="c"># EXPLORE: random action</span>
+    best = np.flatnonzero(Q[s] == Q[s].max())         <span class="c"># EXPLOIT: the best action(s)…</span>
+    <span class="k">return</span> int(rng.choice(best))                      <span class="c"># …ties broken randomly (at the start ALL are 0)</span></pre>
+
+<h3>② Training: the whole algorithm</h3>
+<pre><span class="k">def</span> train(env, episodes, alpha=0.1, gamma=0.99, eps_start=1.0, eps_end=0.05, eps_decay=0.999, seed=0):
+    rng = np.random.default_rng(seed)
+    Q = np.zeros((env.observation_space.n, env.action_space.n))      <span class="c"># 16×4 table of zeros: knows nothing</span>
+    eps = eps_start                                                   <span class="c"># start fully random</span>
+
+    <span class="k">for</span> ep <span class="k">in</span> range(episodes):                                         <span class="c"># one GAME</span>
+        s, _ = env.reset()
+        done = False
+        <span class="k">while not</span> done:                                                <span class="c"># one STEP</span>
+            a = epsilon_greedy(Q, s, eps, rng)                        <span class="c"># 1. choose</span>
+            s2, r, terminated, truncated, _ = <span class="h">env.step(a)</span>              <span class="c"># 2. act, 3. see</span>
+
+            target = r + gamma * np.max(Q[s2]) * (<span class="k">not</span> terminated)     <span class="c"># 4. Bellman target</span>
+            Q[s, a] += alpha * (target - Q[s, a])                     <span class="c"># 5+6. surprise → nudge</span>
+
+            s = s2                                                    <span class="c"># 7. move on</span>
+            done = terminated <span class="k">or</span> truncated
+        eps = max(eps_end, eps * eps_decay)                           <span class="c"># explore a bit less next game</span>
+    <span class="k">return</span> Q, episode_rewards</pre>
+
+<table>
+<tr><th style="width:30%">Line</th><th>Meaning</th></tr>
+<tr><td><code>Q = np.zeros(...)</code></td><td>One number per (state, action), all 0. These zeros are <b>placeholders, not knowledge</b>.</td></tr>
+<tr><td><code>env.step(a)</code></td><td>The <b>only</b> contact with the world. The game rolls its hidden dice and returns where you landed and the reward. Compare with project 2's <code>env.transitions(s, a)</code>, which returned <i>all</i> outcomes with probabilities.</td></tr>
+<tr><td><code>np.max(Q[s2])</code></td><td>Best score stored for the square you <b>landed</b> on. This is <b>only read</b>, nothing is calculated for s2. It's the "Q-max" part.</td></tr>
+<tr><td><code>* (not terminated)</code></td><td>If the game really ended (goal or hole), there's no future: target = r. If it was only <i>truncated</i> (time limit), the future still counts.</td></tr>
+<tr><td><code>target - Q[s, a]</code></td><td>The <b>surprise</b>: how much better or worse the move went than expected.</td></tr>
+<tr><td><code>Q[s, a] += alpha * …</code></td><td>Move the old guess 10% (α = 0.1) toward the target. Only <b>one</b> number changes per step: the state you <b>left</b>, for the action you <b>took</b>.</td></tr>
+<tr><td><code>eps * eps_decay</code></td><td>ε: 1.0 → 0.05 over the games. Explore early, exploit later.</td></tr>
+</table>
+
+<h3>③ Testing: <code>evaluate()</code></h3>
+<p>Plays 1,000 games using <code>np.argmax(Q[s])</code> every step, with <b>no exploration and no learning</b>. This is the "exam". Training scores are lower because training still makes random ε moves.</p>
+
+<h3>The flow of one step</h3>
+<figure>
+<svg viewBox="0 0 760 230" role="img" aria-label="Q-learning step cycle: choose, act, see, Bellman target, surprise, nudge, repeat">
+  <defs><marker id="ar8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <rect x="20" y="20" width="220" height="60" rx="5" class="bx"/><text x="130" y="44" text-anchor="middle" font-weight="700">1 · CHOOSE action a</text><text x="130" y="64" text-anchor="middle" class="t-m">ε-greedy: random or best Q[s]</text>
+  <line x1="240" y1="50" x2="268" y2="50" class="ln" marker-end="url(#ar8)"/>
+  <rect x="270" y="20" width="220" height="60" rx="5" class="bx"/><text x="380" y="44" text-anchor="middle" font-weight="700">2 · ACT</text><text x="380" y="64" text-anchor="middle" class="t-m">env.step(a): game rolls dice</text>
+  <line x1="490" y1="50" x2="518" y2="50" class="ln" marker-end="url(#ar8)"/>
+  <rect x="520" y="20" width="220" height="60" rx="5" class="bx"/><text x="630" y="44" text-anchor="middle" font-weight="700">3 · SEE</text><text x="630" y="64" text-anchor="middle" class="t-m">new state s2, reward r, ended?</text>
+  <line x1="630" y1="80" x2="630" y2="138" class="ln" marker-end="url(#ar8)"/>
+  <rect x="520" y="140" width="220" height="60" rx="5" class="bxa"/><text x="630" y="164" text-anchor="middle" font-weight="700">4 · BELLMAN TARGET</text><text x="630" y="184" text-anchor="middle">r + γ · max Q[s2]</text>
+  <line x1="520" y1="170" x2="492" y2="170" class="ln" marker-end="url(#ar8)"/>
+  <rect x="270" y="140" width="220" height="60" rx="5" class="bx"/><text x="380" y="164" text-anchor="middle" font-weight="700">5 · SURPRISE</text><text x="380" y="184" text-anchor="middle">target − Q[s, a]</text>
+  <line x1="270" y1="170" x2="242" y2="170" class="ln" marker-end="url(#ar8)"/>
+  <rect x="20" y="140" width="220" height="60" rx="5" class="bxg"/><text x="130" y="164" text-anchor="middle" font-weight="700">6 · NUDGE</text><text x="130" y="184" text-anchor="middle">Q[s, a] += α · surprise</text>
+  <line x1="130" y1="140" x2="130" y2="82" class="ln" marker-end="url(#ar8)"/><text x="138" y="115" class="t-m">7 · s = s2, next step</text>
+</svg>
+<figcaption>Bellman comes AFTER the action, because it needs r and s2, which only the game can provide.</figcaption>
+</figure>
+
+<h3>Which state is updated? The one you <u>left</u></h3>
+<figure>
+<svg viewBox="0 0 760 150" role="img" aria-label="Q of the state you left is updated; the state you landed in is only read; states further ahead are not touched">
+  <defs><marker id="ar9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#151B2F"/></marker></defs>
+  <circle cx="110" cy="55" r="30" class="bxg"/><text x="110" y="61" text-anchor="middle" font-weight="700" font-size="16">s</text>
+  <line x1="140" y1="55" x2="368" y2="55" class="ln" marker-end="url(#ar9)"/><text x="254" y="45" text-anchor="middle">action a, reward r</text>
+  <circle cx="400" cy="55" r="30" class="bxa"/><text x="400" y="61" text-anchor="middle" font-weight="700" font-size="16">s2</text>
+  <line x1="430" y1="55" x2="568" y2="55" class="lnd"/>
+  <circle cx="600" cy="55" r="22" fill="#fff" stroke="#9AA3B9" stroke-dasharray="3 3"/><text x="600" y="60" text-anchor="middle" class="t-m">…</text>
+  <line x1="622" y1="55" x2="680" y2="55" class="lnd"/>
+  <circle cx="710" cy="55" r="24" fill="#fff" stroke="#9AA3B9" stroke-dasharray="3 3"/><text x="710" y="60" text-anchor="middle" class="t-m">goal</text>
+  <text x="110" y="110" text-anchor="middle" class="t-g">UPDATED</text><text x="110" y="128" text-anchor="middle">Q[s, a] changes</text>
+  <text x="400" y="110" text-anchor="middle" class="t-a">only READ</text><text x="400" y="128" text-anchor="middle">max Q[s2], unchanged</text>
+  <text x="650" y="110" text-anchor="middle" class="t-m">not touched this step</text><text x="650" y="128" text-anchor="middle" class="t-m">(summarised inside Q[s2])</text>
+</svg>
+<figcaption>In the code: <code>Q[s, a] += …</code> writes s; <code>np.max(Q[s2])</code> only reads s2. Next step, s2 becomes "the state you left" and gets its own update.</figcaption>
+</figure>
+
+<h3>One update with numbers</h3>
+<p>(Example numbers, Taxi-style: −1 per move.) Before moving, the table says <code>Q[here, south] = 3.00</code>.</p>
+<pre>ACT       press south
+SEE       reward r = −1, landed on a square whose best Q is 5.04
+TARGET    −1 + 0.99 × 5.04 = 3.99        "this move turned out to be worth 3.99"
+SURPRISE  3.99 − 3.00 = +0.99            better than expected
+NUDGE     3.00 + 0.1 × 0.99 = 3.10       move only 10% of the way: one result could be luck</pre>
+
+<!-- ═══════════════════ 09 RIPPLE ═══════════════════ -->
+<h2><span class="n">09</span>Q-learning: how the goal's value travels back</h2>
+<p class="sub">It updates after every step, and the goal's value still ends up flowing backwards. Here is how.</p>
+
+<h3>The 3-state story</h3>
+<pre>   A  ──►  B  ──►  C (GOAL, +1)          (to keep it simple: γ = 1, α = 1, all Q start at 0)
+
+Game 1   A → B :  target = 0 + Q[B] = 0 + 0 = 0   → Q[A] = 0      (B knows nothing yet)
+         B → C :  target = 1  (goal!)             → Q[B] = 1  ★   (only B learns)
+Game 2   A → B :  target = 0 + Q[B] = 0 + 1 = 1   → Q[A] = 1  ★   (A learns, never saw C)</pre>
+<p>A never looked at C. It only looked at its neighbour B, and B had already learned about C. <b>Each square only needs its next neighbour's number.</b> Q[s2] is a stored summary of the whole future from s2, like asking a neighbour "how far to the station?" and adding your own walk to their house.</p>
+
+<div class="box warn"><span class="tag">But s2 can only know the future if someone went there first</span>
+<p>Before a square has been visited, its Q is just the starting 0, a placeholder. Updates that read it learn from nothing (game 1, A → B above). Knowledge has to be built <b>from the goal backwards, by actually walking there</b>. That's why Q-learning needs exploration and many games. Using your own current guesses like this is called <b>bootstrapping</b>.</p>
+</div>
+
+<h3>Real measurement from your FrozenLake run (normal ice)</h3>
+<p>I replayed your exact training (same seed) and recorded the game in which each square on the winning route first got a value above 0:</p>
+<div class="two">
+<div>
+<table class="gw big">
+<tr><td class="ice"><b>S</b>game 70</td><td class="ice">game 66</td><td class="ice">game 64</td><td class="ice">·</td></tr>
+<tr><td class="ice">·</td><td class="H">H</td><td class="ice">game 47</td><td class="H">H</td></tr>
+<tr><td class="ice">·</td><td class="ice">·</td><td class="ice">game 43</td><td class="H">H</td></tr>
+<tr><td class="H">H</td><td class="ice">·</td><td class="ice" style="font-weight:700;color:var(--accent)">game 38</td><td class="G">G</td></tr>
+</table>
+</div>
+<div>
+<ul>
+<li><b>Games 1–37:</b> wandering randomly (ε ≈ 1), falling in holes. The whole table stays 0.</li>
+<li><b>Game 38:</b> it reaches the goal by luck for the first time. One number changes: <code>Q[14, right] = 0 + 0.1 × (1 − 0) = 0.1</code>.</li>
+<li>Then the news travels back along the route: 14 → 10 → 6 → 2 → 1 → 0.</li>
+<li><b>Game 70:</b> the start square finally "knows" which way the goal is.</li>
+</ul>
+</div>
+</div>
+
+<h3>After 2,000 games: the final numbers along the route</h3>
+<table>
+<tr><th>Square, action</th><th class="n">Learned Q</th><th>Why</th></tr>
+<tr><td>14, right</td><td class="n">1.000</td><td>one step from the goal: reward 1</td></tr>
+<tr><td>10, down</td><td class="n">0.990</td><td>0.99 × 1.000</td></tr>
+<tr><td>6, down</td><td class="n">0.980</td><td>0.99 × 0.990</td></tr>
+<tr><td>2, down</td><td class="n">0.970</td><td>0.99 × 0.980</td></tr>
+<tr><td>1, right</td><td class="n">0.961</td><td>0.99 × 0.970</td></tr>
+<tr><td>0 (start), right</td><td class="n">0.951</td><td>0.99 × 0.961</td></tr>
+</table>
+<p>Exactly the pattern value iteration produced in project 2 (×γ per step back), but discovered purely from experience.</p>
+
+<div class="box plain"><span class="tag">Correcting a common picture</span>
+<p><span class="wrong">Not:</span> "play until the goal, then calculate everything backwards." There's no backwards code anywhere.<br>
+<span class="right">Actually:</span> it updates <b>after every single step</b>. The backwards flow happens <b>across games</b>: each game that passes through pushes the news one more square back. (The "play to the end, then update everything backwards" method also exists. It's called <b>Monte Carlo</b>.)</p>
+</div>
+
+<h3>Why every square eventually gets learned</h3>
+<p>ε forces random moves. Without it the agent would walk the same few paths forever, and squares it never visited would stay 0 forever. In the playground (<code>playground.html</code>), set ε to 0 after a reset and you can watch it get stuck, never discovering the goal.</p>
+
+<!-- ═══════════════════ 10 FROZENLAKE ═══════════════════ -->
+<h2><span class="n">10</span>FrozenLake results</h2>
+<p class="sub">Real output of <code>python frozen_lake.py</code>.</p>
+
+<table>
+<tr><th>Part</th><th>Setup</th><th class="n">Success (1,000 test games)</th><th class="n">Avg steps</th></tr>
+<tr><td>1 · normal ice</td><td>Q-learning, 2,000 games, α 0.1, ε-decay 0.995</td><td class="n"><b>100.0%</b></td><td class="n">6.0 (shortest possible)</td></tr>
+<tr><td>2 · slippery ice</td><td>Q-learning, 20,000 games, α 0.05, ε-decay 0.9995</td><td class="n"><b>73.9%</b></td><td class="n">40.8</td></tr>
+<tr><td>3 · answer key</td><td>value iteration WITH the hidden rule book <code>env.unwrapped.P</code></td><td class="n"><b>73.0%</b></td><td class="n">45.2</td></tr>
+</table>
+
+<div class="boards">
+<div class="board"><div class="cap">Q-learning, normal ice</div>
+<table class="gw big">
+<tr><td class="ice"><b>→</b></td><td class="ice"><b>→</b></td><td class="ice"><b>↓</b></td><td class="ice"><b>←</b></td></tr>
+<tr><td class="ice"><b>↑</b></td><td class="H">H</td><td class="ice"><b>↓</b></td><td class="H">H</td></tr>
+<tr><td class="ice"><b>↑</b></td><td class="ice"><b>↓</b></td><td class="ice"><b>↓</b></td><td class="H">H</td></tr>
+<tr><td class="H">H</td><td class="ice"><b>→</b></td><td class="ice"><b>→</b></td><td class="G">G</td></tr>
+</table></div>
+<div class="board"><div class="cap">Q-learning, slippery ice</div>
+<table class="gw big">
+<tr><td class="ice new"><b>←</b></td><td class="ice"><b>↑</b></td><td class="ice new"><b>←</b></td><td class="ice new"><b>↓</b></td></tr>
+<tr><td class="ice"><b>←</b></td><td class="H">H</td><td class="ice new"><b>→</b></td><td class="H">H</td></tr>
+<tr><td class="ice"><b>↑</b></td><td class="ice"><b>↓</b></td><td class="ice"><b>←</b></td><td class="H">H</td></tr>
+<tr><td class="H">H</td><td class="ice"><b>→</b></td><td class="ice"><b>↓</b></td><td class="G">G</td></tr>
+</table></div>
+<div class="board"><div class="cap">Answer key (value iteration), slippery</div>
+<table class="gw big">
+<tr><td class="ice"><b>←</b></td><td class="ice"><b>↑</b></td><td class="ice new"><b>↑</b></td><td class="ice new"><b>↑</b></td></tr>
+<tr><td class="ice"><b>←</b></td><td class="H">H</td><td class="ice new"><b>←</b></td><td class="H">H</td></tr>
+<tr><td class="ice"><b>↑</b></td><td class="ice"><b>↓</b></td><td class="ice"><b>←</b></td><td class="H">H</td></tr>
+<tr><td class="H">H</td><td class="ice"><b>→</b></td><td class="ice"><b>↓</b></td><td class="G">G</td></tr>
+</table></div>
+</div>
+
+<h3>What to notice</h3>
+<ul>
+<li><b>The start square aims LEFT, into the wall.</b> Aiming left on ice gives: left (wall → stay), up (wall → stay), or down (move on). It can <b>never slide right</b> toward the holes. Slow but safe, the same idea as (1,3) switching to "left" in project 2.</li>
+<li><b>Q-learning ties the answer key:</b> 73.9% vs 73.0% (the 1% is test luck; you can't beat the best possible). Same arrow on 8 of 11 safe squares. The 3 that differ (outlined) are squares rarely visited, or where two actions score almost the same.</li>
+<li><b>Slippery needed 10× the games:</b> it has to experience every slide many times before the averages are right.</li>
+<li><b>Training curve below the test score:</b> during training, 5% of moves are still random, and on ice a random move next to a hole is often fatal. The test uses no exploration.</li>
+</ul>
+<figure><img src="file:///D:/Langchain/rl_projects/03_frozenlake_taxi_qlearning/frozen_lake_results.png" alt="FrozenLake learning curves and policy maps"><figcaption><code>frozen_lake_results.png</code>: learning curves (top) and the three policies (bottom).</figcaption></figure>
+
+<!-- ═══════════════════ 11 TAXI ═══════════════════ -->
+<h2><span class="n">11</span>Taxi results</h2>
+<p class="sub">Same <code>q_learning.py</code>, a much bigger world. Real output of <code>python taxi.py</code>.</p>
+
+<h3>Why 500 states?</h3>
+<pre>taxi row (5) × taxi column (5) × passenger location (R, G, Y, B, in taxi = 5) × destination (4)  =  500 states
+500 states × 6 actions (south, north, east, west, pickup, dropoff)                              = 3,000 numbers in Q
+rewards:  −1 per step   ·   +20 correct drop-off   ·   −10 illegal pickup / drop-off</pre>
+
+<div class="two">
+<div>
+<table>
+<tr><th>Training games</th><th class="n">Avg reward (last 100)</th></tr>
+<tr><td>0 (random driver)</td><td class="n">−200.0</td></tr>
+<tr><td>500</td><td class="n">−337.6</td></tr>
+<tr><td>1,000</td><td class="n">−70.7</td></tr>
+<tr><td>1,500</td><td class="n">−12.4</td></tr>
+<tr><td>2,000</td><td class="n">−2.4</td></tr>
+<tr><td>3,000</td><td class="n">+5.6</td></tr>
+<tr><td>5,000</td><td class="n">+5.9</td></tr>
+<tr><td><b>Test, no exploration</b></td><td class="n"><b>+7.9</b> (13.1 steps)</td></tr>
+</table>
+</div>
+<div>
+<ul>
+<li><b>Worse than random at 500 games (−338)</b>: exploring means lots of illegal pickups at −10 each, and most squares still know nothing.</li>
+<li>The random driver scores exactly −200: it never delivers, and the game stops itself at 200 steps × −1.</li>
+<li><b>400 of 500 states</b> were learned. The other 100 are "passenger already at destination", which only exist after the game ends, so the agent never stands in them.</li>
+</ul>
+</div>
+</div>
+
+<h3>One game by the trained taxi</h3>
+<pre>Start: taxi at (row 3, col 0), passenger at Y, wants to go to G
+Q-values here:  south +8.5   north −1.1   east −2.0   west −0.9   pickup −8.7   dropoff −9.1
+                ▲ best: Y is right below                          ▲ terrible: no passenger here → −10
+
+south, pickup, north, north, east, east, north, east, north, east, dropoff (+20)
+Finished in 11 steps, total reward +10   (= +20 − 10 moves)</pre>
+<figure><img src="file:///D:/Langchain/rl_projects/03_frozenlake_taxi_qlearning/taxi_results.png" alt="Taxi learning curve"><figcaption><code>taxi_results.png</code>: from about −750 per game to about +6 in 2,500 games, then flat.</figcaption></figure>
+
+<!-- ═══════════════════ 12 SIDE BY SIDE ═══════════════════ -->
+<h2><span class="n">12</span>Side by side</h2>
+<p class="sub">Everything in one table. The first row causes all the others.</p>
+
+<table class="long">
+<tr><th style="width:26%"></th><th>Value iteration (project 2)</th><th>Q-learning (project 3)</th></tr>
+<tr><td><b>Has the rule book?</b></td><td><b>Yes</b>: <code>transitions(s, a)</code></td><td><b>No</b>: only <code>env.step(a)</code></td></tr>
+<tr><td>Plays the game?</td><td>Never, pure calculation</td><td>Yes, thousands of games</td></tr>
+<tr><td>States updated per step</td><td><b>All</b> of them, every sweep</td><td><b>One</b>: the state you just left</td></tr>
+<tr><td>Actions calculated per update</td><td>All 4 (then keep the max)</td><td>Only the one you took</td></tr>
+<tr><td>Outcomes considered</td><td>All possible slides, weighted by P</td><td>Only the slide that actually happened</td></tr>
+<tr><td>Bellman form</td><td>V(s) = max<sub>a</sub> Σ P·[r + γV(s′)]</td><td>Q(s,a) += α[r + γ max Q(s2) − Q(s,a)]</td></tr>
+<tr><td>Stores</td><td>V: one number per state</td><td>Q: one number per state and action</td></tr>
+<tr><td>Needs to visit a square to learn it?</td><td>No</td><td><b>Yes</b></td></tr>
+<tr><td>Needs exploration (ε)?</td><td>No</td><td>Yes</td></tr>
+<tr><td>Extra knobs</td><td>γ, θ</td><td>γ, α, ε, ε-decay, number of games</td></tr>
+<tr><td>Goal's value travels back…</td><td>one square per <b>sweep</b></td><td>one square per <b>game that passes through</b></td></tr>
+<tr><td>Result</td><td>Exact</td><td>Approximate, but very close (73.9% vs 73.0%)</td></tr>
+<tr><td>Family</td><td><b>Model-based</b> / planning</td><td><b>Model-free</b> / learning (like DQN, PPO)</td></tr>
+<tr><td>Real-world fit</td><td>Only when you know all the rules and the world is small</td><td>When you don't know the rules (most real problems)</td></tr>
+</table>
+
+<div class="box key"><span class="tag">Remember</span>
+<p>"One square at a time vs all at once" is real, but it's a <b>consequence</b>. The root cause is the rule book. Give Q-learning the rule book and it wouldn't need to wander; take it away from value iteration and it couldn't sweep.</p>
+</div>
+
+<!-- ═══════════════════ 13 CONFUSIONS ═══════════════════ -->
+<h2><span class="n">13</span>Clearing up the confusions</h2>
+<p class="sub">Every question asked while building these projects, with the short, correct answer.</p>
+
+<div class="qa"><div class="q">Does Bellman calculate the probability of the next state, or the value?</div>
+<p><b>The value.</b> Probabilities are inputs, given by the world's rules; nobody calculates them. Bellman asks: "given these dice, how good is it here?" The probabilities are just weights in the average.</p></div>
+
+<div class="qa"><div class="q">What does r + γ·V(s′) return: an action or a state?</div>
+<p><b>Neither, a number</b>: the score of one move ("reward now + everything after"). Compare the numbers for all actions: <i>max</i> gives the state's value, <i>argmax</i> gives the action. The game then gives you the next state. And it's γ × the next state's <b>value</b>, not its reward.</p></div>
+
+<div class="qa"><div class="q">Is Bellman calculated for all possible actions?</div>
+<p><b>Value iteration: yes</b>, every square × every action × every slide, every sweep (60 scores per sweep here). <b>Q-learning: no</b>, only the one action you took. <code>max(Q[s2])</code> looks at all actions of s2, but only <i>reads</i> stored numbers.</p></div>
+
+<div class="qa"><div class="q">In Q-learning, is Bellman calculated after taking the action, to see how it went?</div>
+<p><b>Yes.</b> Choose → act → see r and s2 → Bellman target → compare with the old guess → nudge 10%. It has to come after, because only the game can provide r and s2. "How it went" means reward <b>plus</b> how good the new spot looks, which matters because FrozenLake gives r = 0 on almost every step.</p></div>
+
+<div class="qa"><div class="q">Does it wait until the goal is reached and then calculate backwards?</div>
+<p><b>No.</b> It updates after <b>every step</b>. The backwards flow happens <b>across games</b>: game 38 taught square 14, game 43 square 10, … game 70 the start. Waiting for the end and then updating everything is a different method, <b>Monte Carlo</b>.</p></div>
+
+<div class="qa"><div class="q">Which state gets updated: the one I just reached, or the previous one?</div>
+<p><b>The previous one</b>, the state you just <b>left</b> (<code>Q[s, a] += …</code>). The state you landed in (s2) is only <b>read</b> for its best score. You can only judge a move after you see where it took you.</p></div>
+
+<div class="qa"><div class="q">Bellman needs the future all the way to the goal. How can one step ahead be enough?</div>
+<p>Because <b>Q[s2] is already a summary of the whole future</b> from s2. You don't need to touch far-away states; s2's number contains them. A learned about C by looking only at B (section 09).</p></div>
+
+<div class="qa"><div class="q">But s2 can't know the future if it has never been there!</div>
+<p><b>Exactly right</b>, and that's Q-learning's main weakness. Until visited, Q[s2] = 0 is a placeholder; updates using it are temporarily wrong and fixed later. That's why exploration (ε) and many games are needed, why Taxi learned only 400 of 500 states, and why <code>play.py</code>'s coach sometimes says "I never visited this spot".</p></div>
+
+<div class="qa"><div class="q">So it wanders, then slowly learns each square's probabilities and action probabilities?</div>
+<p>It wanders, yes. But it learns <b>scores (Q-values), not probabilities</b>. Slide chances are never stored; they get "baked into" the scores by averaging. Actions are chosen by <b>biggest score</b>, not by probability. (Policy methods like PPO <i>do</i> learn action probabilities, like "70% right, 30% down". The ice's probabilities always belong to the world.)</p></div>
+
+<div class="qa"><div class="q">Is the only difference between the projects "one at a time" vs "all at once"?</div>
+<p>It's a real difference, but a <b>consequence</b>. Root cause: project 2 <b>has the rule book</b>, project 3 doesn't. Also, it's one at a time in <b>outcomes</b> too: value iteration averages all 3 slides, Q-learning learns from the one that happened.</p></div>
+
+<div class="qa"><div class="q">So project 2 creates the rule book, and project 3 learns by playing?</div>
+<p><b>Flip the first half</b>: project 2 is <b>given</b> the rule book (we wrote it in <code>gridworld.py</code>). Both <b>create the same thing: a plan</b> (values + arrows).</p></div>
+
+<div class="qa"><div class="q">What was the policy in project 2? Did we give it?</div>
+<p>No. The policy is the <b>output</b>: <code>greedy_policy()</code> picks the biggest-scoring action in each square after the values settle.</p></div>
+
+<div class="qa"><div class="q">In FrozenLake, is the only unknown where the end is?</div>
+<p><b>Everything</b> is unknown: goal, holes, what actions do, the grid shape, slip chances, rewards. It only knows "16 states, 4 actions, I'm in state 5".</p></div>
+
+<div class="qa"><div class="q">What is the "biggest change"?</div>
+<p>In one sweep, the largest amount any single square's value moved. It's the "are we done yet?" meter: 1.000, 0.900, 0.810, 0.729 … (shrinking by γ). Below θ = 0.000001 → stop.</p></div>
+
+<div class="qa"><div class="q">Does each sweep calculate only the squares near the goal?</div>
+<p>No, <b>every sweep calculates every square</b>. But a square only gets a <i>good</i> number once a neighbour has one, so the good values appear one ring further back per sweep. Far squares just keep collecting −0.04 until the news arrives.</p></div>
+
+<div class="qa"><div class="q">What if the goal is 1,000,000 steps away?</div>
+<p>Plain methods mostly fail. (1) The discount shrinks it: 0.99<sup>1,000,000</sup> is exactly 0 in a computer. (2) Value travels back one step per update, and random exploration would almost never get that far. Real RL uses step penalties (like Taxi's −1), reward shaping, Monte Carlo / multi-step updates, neural networks that generalise, and sub-goals.</p></div>
+
+<div class="qa"><div class="q">Does Google Maps wander like Q-learning?</div>
+<p>No. It has the full map, so it's <b>model-based</b>, like project 2: it calculates without driving.</p></div>
+
+<!-- ═══════════════════ 14 RUN + CHEAT ═══════════════════ -->
+<h2><span class="n">14</span>Run it yourself + cheat sheet</h2>
+
+<h3>Commands</h3>
+<pre><span class="c"># Project 2 — value iteration</span>
+cd D:\Langchain\rl_projects\02_gridworld_value_iteration
+python experiment.py                  <span class="c"># sweeps, Bellman at (1,3), slippery test, results.png</span>
+python experiment.py --slip 0.2       <span class="c"># less icy: does the plan still change?</span>
+python experiment.py --gamma 0.5      <span class="c"># short-sighted agent</span>
+start playground.html                 <span class="c"># interactive: sweeps vs Q-learning side by side</span>
+
+<span class="c"># Project 3 — Q-learning</span>
+cd D:\Langchain\rl_projects\03_frozenlake_taxi_qlearning
+python frozen_lake.py                 <span class="c"># parts 1–3, frozen_lake_results.png</span>
+python taxi.py                        <span class="c"># learning progress + one watched game</span>
+python play.py slippery               <span class="c"># YOU play, H = coach's Q-values, C = coach moves</span></pre>
+
+<h3>Experiments that test your understanding</h3>
+<table>
+<tr><th>Try</th><th>Predict first, then check</th></tr>
+<tr><td>Playground: Reset, then "One Bellman sweep" ×4</td><td>Which squares get good values after each sweep?</td></tr>
+<tr><td>Playground, Q-learning: Train 1 episode, click squares</td><td>How many squares are still "All zeros"?</td></tr>
+<tr><td>Playground, Q-learning: ε = 0 after Reset, train 100</td><td>Does it ever find the goal?</td></tr>
+<tr><td><code>python taxi.py --episodes 1000</code></td><td>Will the test taxi deliver, or time out?</td></tr>
+<tr><td><code>frozen_lake.py</code> part 2 with <code>alpha=0.5</code></td><td>Higher or lower than 73.9%? Why?</td></tr>
+<tr><td><code>play.py slippery</code>, 10 games without hints</td><td>Can you beat 74%?</td></tr>
+</table>
+
+<h3>Cheat sheet</h3>
+<div class="two">
+<div class="box plain" style="margin:0"><span class="tag">Value iteration</span>
+<pre style="background:#fff;margin:6px 0">V = 0 everywhere
+repeat:
+  for every state s:
+    V(s) = max over a of
+      Σ P(s′|s,a)·[r + γ·V(s′)]
+until biggest change &lt; θ
+policy(s) = argmax over a</pre>
+<p style="font-size:9.5pt">Needs: the rule book. Knobs: γ, θ.<br>Output: V + arrows. Exact.</p>
+</div>
+<div class="box ok" style="margin:0"><span class="tag">Q-learning</span>
+<pre style="background:#fff;margin:6px 0">Q = 0 everywhere
+for each game:
+  for each step:
+    a = ε-greedy(Q[s])
+    s2, r = env.step(a)
+    target = r + γ·max Q[s2]
+    Q[s,a] += α·(target − Q[s,a])
+    s = s2
+  ε = ε × decay</pre>
+<p style="font-size:9.5pt">Needs: only the game. Knobs: γ, α, ε.<br>Output: Q + arrows. Approximate.</p>
+</div>
+</div>
+
+<div class="box key" style="margin-top:14px"><span class="tag">The four sentences to remember</span>
+<ol style="margin:0">
+<li>Bellman calculates a <b>value</b> (a number); probabilities and rewards are given; the action is the argmax.</li>
+<li><b>Value iteration</b> has the rule book, so it calculates every square, action and slide, sweep after sweep, without playing.</li>
+<li><b>Q-learning</b> has no rule book: after each real move, it updates the state it <b>left</b> using the best stored score of the state it <b>landed</b> in.</li>
+<li>In both, the goal's value flows backwards one step at a time: per <b>sweep</b> in value iteration, per <b>game</b> in Q-learning.</li>
+</ol>
+</div>
+
+</main>
+</body>
+</html>

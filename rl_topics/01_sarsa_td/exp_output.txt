@@ -1,0 +1,32 @@
+======================================================================
+EXPERIMENT 1 · Exploration ε (α = 0.5, ε fixed), 20 runs each
+======================================================================
+  greedy path lengths: 13 = cliff edge, 15 = one row up, 17 = top row, 100 = loops
+  ε = 0.01  SARSA       training reward/game: all   -22.9, last 100   -16.5   paths: 15×14, 17×5, 100×1
+  ε = 0.01  Q-learning  training reward/game: all   -22.1, last 100   -15.7   paths: 13×20
+  ε = 0.1   SARSA       training reward/game: all   -36.1, last 100   -26.5   paths: 17×16, 19×2, 100×2
+  ε = 0.1   Q-learning  training reward/game: all   -55.5, last 100   -50.5   paths: 13×20
+  ε = 0.2   SARSA       training reward/game: all   -53.0, last 100   -41.4   paths: 17×13, 19×1, 100×6
+  ε = 0.2   Q-learning  training reward/game: all  -110.6, last 100  -110.9   paths: 13×20
+
+======================================================================
+EXPERIMENT 2 · ε starts at 0.1 and shrinks ×0.99 per game (≈0.0007 at the end)
+======================================================================
+  SARSA           training reward/game: all   -27.3, last 100   -17.2   paths: 17×20
+  Expected SARSA  training reward/game: all   -22.9, last 100   -15.0   paths: 13×1, 15×19
+  Q-learning      training reward/game: all   -26.5, last 100   -13.2   paths: 13×20
+
+======================================================================
+EXPERIMENT 3 · Learning rate α (ε = 0.1 fixed)
+======================================================================
+  SARSA           α = 0.1  training reward/game: all   -51.0, last 100   -21.6   paths: 15×18, 17×2
+  SARSA           α = 0.5  training reward/game: all   -36.1, last 100   -26.5   paths: 17×16, 19×2, 100×2
+  SARSA           α = 1.0  training reward/game: all   -87.1, last 100  -126.3   paths: 17×2, 19×4, 21×1, 100×13
+  Expected SARSA  α = 0.1  training reward/game: all   -48.8, last 100   -21.8   paths: 15×19, 100×1
+  Expected SARSA  α = 0.5  training reward/game: all   -28.2, last 100   -20.8   paths: 15×20
+  Expected SARSA  α = 1.0  training reward/game: all   -25.6, last 100   -20.6   paths: 15×20
+  Q-learning      α = 0.1  training reward/game: all   -69.0, last 100   -47.4   paths: 13×20
+  Q-learning      α = 0.5  training reward/game: all   -55.5, last 100   -50.5   paths: 13×20
+  Q-learning      α = 1.0  training reward/game: all   -56.3, last 100   -50.5   paths: 13×20
+
+Charts saved to exp_eps_paths.png and exp_alpha.png

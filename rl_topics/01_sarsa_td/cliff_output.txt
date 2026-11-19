@@ -1,0 +1,76 @@
+==================================================================
+PART 1 · One training run per method: 500 games, α=0.5, ε=0.1, γ=1
+==================================================================
+
+  SARSA
+    training: avg reward of last 100 games   -26.2, cliff falls in 500 games: 53
+    greedy test (no exploration): reward -17, 17 steps
+    test still exploring (ε=0.1, 1000 games): avg reward -21.9, cliff falls per game 0.028
+     *  *  *  *  *  *  *  *  *  *  *  .
+     *  .  .  .  .  .  .  .  .  .  *  *
+     *  .  .  .  .  .  .  .  .  .  .  *
+     S  C  C  C  C  C  C  C  C  C  C  G
+
+  Expected SARSA
+    training: avg reward of last 100 games   -22.4, cliff falls in 500 games: 38
+    greedy test (no exploration): reward -15, 15 steps
+    test still exploring (ε=0.1, 1000 games): avg reward -21.2, cliff falls per game 0.040
+     .  .  .  .  .  .  .  .  .  .  .  .
+     *  *  *  *  *  *  *  *  *  *  *  *
+     *  .  .  .  .  .  .  .  .  .  .  *
+     S  C  C  C  C  C  C  C  C  C  C  G
+
+  Q-learning
+    training: avg reward of last 100 games   -61.8, cliff falls in 500 games: 179
+    greedy test (no exploration): reward -13, 13 steps
+    test still exploring (ε=0.1, 1000 games): avg reward -48.8, cliff falls per game 0.323
+     .  .  .  .  .  .  .  .  .  .  .  .
+     .  .  .  .  .  .  .  .  .  .  .  .
+     *  *  *  *  *  *  *  *  *  *  *  *
+     S  C  C  C  C  C  C  C  C  C  C  G
+
+==================================================================
+PART 2 · 50 runs per method (different seeds), averaged
+==================================================================
+
+  SARSA
+    avg training reward per game, games 1-500:   -36.9   games 401-500:   -26.3
+    avg cliff falls per game, games 401-500: 0.044
+    greedy path length over the runs: 17 steps × 40, 19 steps × 3, 100 steps × 7
+    (100 steps = the greedy arrows walk in a circle and never reach G)
+
+  Expected SARSA
+    avg training reward per game, games 1-500:   -28.1   games 401-500:   -20.7
+    avg cliff falls per game, games 401-500: 0.035
+    greedy path length over the runs: 15 steps × 50
+
+  Q-learning
+    avg training reward per game, games 1-500:   -55.4   games 401-500:   -49.3
+    avg cliff falls per game, games 401-500: 0.327
+    greedy path length over the runs: 13 steps × 50
+
+==================================================================
+PART 3 · One transition, three targets (using SARSA's learned table)
+==================================================================
+  s = 24 (row 2, col 0), action = right, reward = -1, s2 = 25 (row 2, col 1, cliff edge)
+  old Q[s, right] = -19.79
+  Q[s2] = ↑ -18.23  → -24.19  ↓ -114.54  ← -20.96
+  my ε-greedy probabilities in s2 = ↑ 0.925  → 0.025  ↓ 0.025  ← 0.025
+  Q-learning (max)                   future  -18.23  target  -19.23  δ  +0.56  new Q  -19.51
+  SARSA, a2 = ↑ (greedy, 92.5%)      future  -18.23  target  -19.23  δ  +0.56  new Q  -19.51
+  SARSA, a2 = ↓ (explore, 2.5%)      future -114.54  target -115.54  δ -95.75  new Q  -67.66
+  Expected SARSA (average)           future  -20.86  target  -21.86  δ  -2.07  new Q  -20.82
+
+==================================================================
+PART 3 · One transition, three targets (using Q-learning's learned table)
+==================================================================
+  s = 24 (row 2, col 0), action = right, reward = -1, s2 = 25 (row 2, col 1, cliff edge)
+  old Q[s, right] = -12.00
+  Q[s2] = ↑ -12.97  → -11.00  ↓ -112.92  ← -13.00
+  my ε-greedy probabilities in s2 = ↑ 0.025  → 0.925  ↓ 0.025  ← 0.025
+  Q-learning (max)                   future  -11.00  target  -12.00  δ  +0.00  new Q  -12.00
+  SARSA, a2 = → (greedy, 92.5%)      future  -11.00  target  -12.00  δ  +0.00  new Q  -12.00
+  SARSA, a2 = ↓ (explore, 2.5%)      future -112.92  target -113.92  δ -101.92  new Q  -62.96
+  Expected SARSA (average)           future  -13.65  target  -14.65  δ  -2.65  new Q  -13.32
+
+Charts saved to cliff_curves.png and cliff_paths.png

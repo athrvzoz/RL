@@ -1,0 +1,59 @@
+<!-- ═══════════ 09 ═══════════ -->
+<h2><span class="n">09</span>Running it: bandit and rock-paper-scissors</h2>
+<p class="sub">Real output of <code>python bandit_pg.py</code> and <code>python rps.py</code>.</p>
+
+<h3>3-armed bandit: arms pay 1.0, 2.0 and 1.5 on average (plus noise)</h3>
+<table>
+<tr><th>1,000 pulls, 200 runs</th><th class="n">P(best arm) after 100 pulls</th><th class="n">after 1,000</th><th class="n">avg reward</th><th class="n">runs ending on a wrong arm</th></tr>
+<tr><td>no baseline</td><td class="n">0.732</td><td class="n">0.978</td><td class="n">1.935</td><td class="n">2 of 200</td></tr>
+<tr><td>with baseline (running average reward)</td><td class="n"><b>0.782</b></td><td class="n"><b>0.989</b></td><td class="n"><b>1.949</b></td><td class="n"><b>0 of 200</b></td></tr>
+</table>
+<figure><img style="max-width:95mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/04_policy_gradient/bandit_pg.png" alt="Probability of best arm over pulls"><figcaption>The probability of the best arm climbs smoothly from 1/3 towards 1. The baseline makes it faster and safer: no run locked onto a wrong arm (without it, every reward here is positive, so every pulled arm gets pushed up).</figcaption></figure>
+
+
+<h3>Rock-paper-scissors: learning probabilities</h3>
+<p><b>Against a biased opponent</b> (rock 50%, paper 25%, scissors 25%), the agent's probabilities:</p>
+<pre>
+round    rock   paper  scissors
+    0   0.333   0.333   0.333
+  200   0.367   0.459   0.174
+  500   0.147   0.798   0.055
+ 1000   0.050   0.919   0.031
+ 2000   0.015   0.975   0.010        average score over 2,000 rounds: +0.206 (always-paper: +0.250)
+</pre>
+<p>It discovered "paper beats their favourite rock". While learning it stays a little random, so it scores a bit less than the perfect +0.25.</p>
+<p><b>Against the spy</b>, which counters your most common move, the probabilities never settle: paper goes up → the spy plays scissors → scissors gets punished → rock goes up → … The largest probability after round 500 reached 0.984, and the score stayed near 0 (+0.040).</p>
+<figure><img style="max-width:118mm;margin:0 auto" src="file:///D:/Langchain/rl_topics/04_policy_gradient/rps_probs.png" alt="RPS probabilities against biased opponent and spy"><figcaption>Left: a steady climb to paper. Right: against an adapting opponent, the learner keeps chasing and overshooting. The true safe answer (1/3 each) is a balance point it keeps swinging past.</figcaption></figure>
+
+<!-- ═══════════ 10 ═══════════ -->
+<h2><span class="n">10</span>Running it: CartPole</h2>
+<p class="sub">Real output of <code>python cartpole.py</code>: 600 games, 3 seeds per variant.</p>
+
+<table>
+<tr><th>Variant</th><th class="n">last-100 avg score</th><th class="n">game-to-game spread</th><th class="n">test (rolling dice)</th><th class="n">test (greedy)</th></tr>
+<tr><td>no baseline</td><td class="n">231.5</td><td class="n">63.6</td><td class="n">253.2</td><td class="n">315.5</td></tr>
+<tr><td><b>with baseline</b></td><td class="n"><b>478.2</b></td><td class="n"><b>37.2</b></td><td class="n"><b>500.0</b></td><td class="n"><b>500.0</b></td></tr>
+<tr><td>whole-game return (no returns-to-go)</td><td class="n">32.5</td><td class="n">15.0</td><td class="n">32.6</td><td class="n">35.3</td></tr>
+</table>
+<p>Per seed, with baseline: test scores <b>500, 500, 500</b>, all three seeds perfect. Without a baseline: 103, 248, 409, a lottery.</p>
+
+<figure><img src="file:///D:/Langchain/rl_topics/04_policy_gradient/cartpole_reinforce.png" alt="REINFORCE learning curves on CartPole"><figcaption>Average of 3 seeds. With a baseline (blue) the agent reaches 500 by about game 220, drops, recovers and finishes at 500. Without (orange) it wanders between 100 and 270. Whole-game returns (grey) barely learn.</figcaption></figure>
+
+<h3>What to notice</h3>
+<ul>
+<li><b>The baseline is the difference between working and not working.</b> In CartPole every reward is +1, so without it every action is pushed up and the signal drowns in noise.</li>
+<li><b>Returns-to-go matter even more.</b> Crediting each action with the whole game's total (including rewards from <i>before</i> it) gave 32.5, barely above random (≈ 22).</li>
+<li><b>Even the good version drops and recovers</b> (games 220–320): one unlucky big update can make the policy worse. That's the problem PPO was invented to solve (booklet 06).</li>
+</ul>
+
+<h3>Inside the learned policy (best "with baseline" seed)</h3>
+<pre>
+state                         P(left)   P(right)
+balanced, still                0.983     0.017
+pole leaning RIGHT, still      0.731     0.269      ← surprising!
+pole leaning LEFT, still       0.999     0.001
+pole falling right fast        0.000     1.000      ✓ push right, completely sure
+</pre>
+<div class="box warn"><span class="tag">An honest lesson about generalisation</span>
+<p>The policy is <b>certain</b> about the state it really meets (a pole spinning to the right → push right, 100%). But "leaning right while perfectly still" almost never happens in its own games: its pole is always moving a little. In those unfamiliar states its answers are unreliable, even though it scores a perfect 500 in real play. A network only learns well <b>where it has experience</b>, the same lesson as unvisited squares in FrozenLake. It also shows the policy mainly reacts to <b>spin</b>, not lean, which is a perfectly good strategy.</p>
+</div>

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bellman Playground</title>
+<!-- The playground from "RL From Zero", chapter 07. Works offline: double-click to open in a browser. -->
+<style>
+:root{
+  --bg:#F2F4F8; --surface:#FFFFFF; --ink:#151B2F; --muted:#5B647A; --line:#D6DCE7;
+  --accent:#2C4BD1; --accent-soft:#E2E7FA; --gold:#A86A08; --gold-soft:#FBF0DA;
+  --good:#1E8A5A; --bad:#C2413A;
+  --f-body:"Segoe UI", system-ui, sans-serif;
+  --f-mono:Consolas, ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D111D; --surface:#151B2C; --ink:#E5E8F1; --muted:#9AA3B9; --line:#2A324D;
+  --accent:#8FA3FF; --accent-soft:#1C2545; --gold:#E7B54A; --gold-soft:#2B2414;
+  --good:#4CC38A; --bad:#F07167; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D111D; --surface:#151B2C; --ink:#E5E8F1; --muted:#9AA3B9; --line:#2A324D;
+  --accent:#8FA3FF; --accent-soft:#1C2545; --gold:#E7B54A; --gold-soft:#2B2414;
+  --good:#4CC38A; --bad:#F07167; color-scheme:dark}
+
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.6;margin:0}
+main{max-width:980px;margin:0 auto;padding:32px 16px 60px}
+h1{font-weight:800;font-size:clamp(1.8rem,5vw,2.6rem);line-height:1.1;margin:0 0 6px}
+.sub{color:var(--muted);margin:0 0 18px}
+p{margin:0 0 14px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+.lab{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin:20px 0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{font:600 14px var(--f-body);padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.lab-body{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px}
+@media (max-width:720px){.lab-body{grid-template-columns:minmax(0,1fr)}}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;align-self:start}
+.cell{aspect-ratio:1;max-width:100%;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);font:600 13px var(--f-mono);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;cursor:pointer;position:relative;padding:0;font-variant-numeric:tabular-nums}
+.cell .arr{font-size:20px;line-height:1;color:var(--ink)}
+.cell .lbl{font-size:10px;font-weight:400;color:var(--muted);position:absolute;top:3px;left:4px}
+.cell.wall{background:repeating-linear-gradient(45deg,var(--line) 0 4px,var(--bg) 4px 9px);cursor:default}
+.cell.sel{outline:2.5px solid var(--accent);outline-offset:-1px}
+.cell.agent::after{content:"";position:absolute;width:30%;height:30%;border-radius:50%;background:var(--gold);bottom:6px;right:6px;box-shadow:0 0 0 2px var(--surface)}
+.ctrl{display:flex;flex-direction:column;gap:12px;min-width:0}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btn{font:600 13.5px var(--f-body);padding:7px 12px;border-radius:5px;border:1px solid var(--accent);background:var(--accent);color:var(--surface);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.slider{display:grid;grid-template-columns:auto 1fr 3.2em;gap:8px;align-items:center;font-size:14px}
+.slider output{font-family:var(--f-mono);font-size:13px;text-align:right}
+.slider input{width:100%;accent-color:var(--accent)}
+.stats{font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
+.explain{font-size:14px;background:var(--bg);border-radius:6px;padding:12px;min-height:150px}
+.explain .row{font-family:var(--f-mono);font-size:12.5px;padding:2px 0;font-variant-numeric:tabular-nums}
+.explain .best{color:var(--good);font-weight:600}
+.explain h5{margin:0 0 6px;font:700 14px var(--f-body)}
+
+.try{background:var(--gold-soft);border:1px solid color-mix(in srgb,var(--gold) 45%,transparent);padding:16px 18px;border-radius:6px;margin:18px 0}
+.try .tag{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.try ol{margin:0;padding-left:1.3em}
+.try li{margin-bottom:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main>
+<h1>Bellman Playground</h1>
+<p class="sub">Run the Bellman equation yourself. Green squares are good, red are bad, arrows are the current best move.</p>
+
+<div class="lab">
+  <div class="tabs" role="tablist" aria-label="Algorithm">
+    <button type="button" role="tab" id="tab-vi" aria-selected="true">Value iteration (knows the map)</button>
+    <button type="button" role="tab" id="tab-ql" aria-selected="false">Q-learning (learns by trying)</button>
+  </div>
+  <div class="lab-body">
+    <div>
+      <div class="grid" id="grid" aria-label="Gridworld"></div>
+      <p class="stats" id="stats" style="margin-top:10px"></p>
+    </div>
+    <div class="ctrl">
+      <div class="btns" id="btns-vi">
+        <button type="button" class="btn" id="b-sweep">One Bellman sweep</button>
+        <button type="button" class="btn ghost" id="b-play">Play until settled</button>
+      </div>
+      <div class="btns" id="btns-ql" hidden>
+        <button type="button" class="btn" id="b-ep1">Train 1 episode</button>
+        <button type="button" class="btn" id="b-ep100">Train 100 episodes</button>
+      </div>
+      <div class="btns">
+        <button type="button" class="btn ghost" id="b-watch">Watch the agent</button>
+        <button type="button" class="btn ghost" id="b-reset">Reset</button>
+      </div>
+      <label class="slider" for="r-gamma">γ discount <input type="range" id="r-gamma" min="0.5" max="0.99" step="0.01" value="0.9"><output id="o-gamma">0.90</output></label>
+      <div id="ql-sliders" hidden style="display:grid;gap:12px">
+        <label class="slider" for="r-eps">ε explore <input type="range" id="r-eps" min="0" max="1" step="0.05" value="0.2"><output id="o-eps">0.20</output></label>
+        <label class="slider" for="r-alpha">α step size <input type="range" id="r-alpha" min="0.05" max="1" step="0.05" value="0.5"><output id="o-alpha">0.50</output></label>
+      </div>
+      <div class="explain" id="explain" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
+<div class="try"><span class="tag">Try this</span>
+<ol>
+<li>In <strong>Value iteration</strong>, press "One Bellman sweep" a few times. Watch value spread backwards from the +1 goal, one square per sweep.</li>
+<li>Click any square. The panel shows the Bellman optimality equation computed for that square with real numbers.</li>
+<li>Drop γ to 0.5. The agent becomes short-sighted and values near the start barely move above the step cost.</li>
+<li>Switch to <strong>Q-learning</strong>. The agent doesn't know the map. Train 1 episode at a time at first and see how little it learns; then train 100. Set ε to 0 from the start (after a reset) and notice it can get stuck never discovering the goal.</li>
+</ol>
+</div>
+<p>Rules of this world: start at S, +1 for reaching the goal, −1 for the pit, −0.04 for every other step (so wandering costs a little). Walking into a wall or the edge leaves you where you are.</p>
+</main>
+
+<script>
+(function(){
+  const LAYOUT=["....G",".#..P",".#.#.","S...."];
+  const R=4,C=5,N=R*C,STEP=-0.04;
+  const ACTS=[{dr:-1,dc:0,g:'↑',n:'up'},{dr:0,dc:1,g:'→',n:'right'},{dr:1,dc:0,g:'↓',n:'down'},{dr:0,dc:-1,g:'←',n:'left'}];
+  const kind=i=>LAYOUT[Math.floor(i/C)][i%C];
+  const isWall=i=>kind(i)==='#';
+  const isTerm=i=>kind(i)==='G'||kind(i)==='P';
+  const START=LAYOUT.join('').indexOf('S');
+  function move(i,a){const r=Math.floor(i/C)+ACTS[a].dr,c=i%C+ACTS[a].dc;if(r<0||r>=R||c<0||c>=C)return i;const j=r*C+c;return isWall(j)?i:j;}
+  function rew(j){return kind(j)==='G'?1:kind(j)==='P'?-1:STEP;}
+  const fmt=x=>(x<0?'−':'')+Math.abs(x).toFixed(2);
+  const $=id=>document.getElementById(id);
+
+  const st={mode:'vi',gamma:0.9,eps:0.2,alpha:0.5,V:new Array(N).fill(0),sweeps:0,lastDelta:null,
+    Q:Array.from({length:N},()=>[0,0,0,0]),episodes:0,lastSteps:[],sel:8,agent:-1,timer:null};
+
+  function sweep(){const nv=st.V.slice();let d=0;
+    for(let i=0;i<N;i++){if(isWall(i)||isTerm(i))continue;let best=-Infinity;
+      for(let a=0;a<4;a++){const j=move(i,a);const v=rew(j)+st.gamma*st.V[j];if(v>best)best=v;}
+      d=Math.max(d,Math.abs(best-st.V[i]));nv[i]=best;}
+    st.V=nv;st.sweeps++;st.lastDelta=d;return d;}
+  function greedy(i){
+    if(isWall(i)||isTerm(i))return -1;
+    if(st.mode==='vi'){if(st.sweeps===0)return -1;let best=-Infinity,ba=-1;for(let a=0;a<4;a++){const j=move(i,a);const v=rew(j)+st.gamma*st.V[j];if(v>best+1e-12){best=v;ba=a;}}return ba;}
+    const q=st.Q[i];if(q.every(x=>x===0))return -1;return q.indexOf(Math.max(...q));}
+  function value(i){return st.mode==='vi'?st.V[i]:(st.Q[i].every(x=>x===0)?0:Math.max(...st.Q[i]));}
+  function episode(){let s=START,steps=0;
+    while(steps<100){let a;
+      if(Math.random()<st.eps)a=Math.floor(Math.random()*4);
+      else{const q=st.Q[s],m=Math.max(...q),b=[0,1,2,3].filter(k=>q[k]===m);a=b[Math.floor(Math.random()*b.length)];}
+      const j=move(s,a),r=rew(j);const target=r+(isTerm(j)?0:st.gamma*Math.max(...st.Q[j]));
+      st.Q[s][a]+=st.alpha*(target-st.Q[s][a]);s=j;steps++;if(isTerm(j))break;}
+    st.episodes++;st.lastSteps.push(steps);if(st.lastSteps.length>20)st.lastSteps.shift();}
+
+  const grid=$('grid');const cells=[];
+  for(let i=0;i<N;i++){const b=document.createElement('button');b.type='button';b.className='cell';
+    const k=kind(i);if(k==='#'){b.classList.add('wall');b.disabled=true;b.setAttribute('aria-label','wall');}
+    b.addEventListener('click',()=>{st.sel=i;render();});grid.appendChild(b);cells.push(b);}
+
+  function render(){
+    for(let i=0;i<N;i++){const b=cells[i],k=kind(i);if(k==='#')continue;
+      b.classList.toggle('sel',st.sel===i);b.classList.toggle('agent',st.agent===i);
+      let html='';
+      if(k==='G'){html='<span class="lbl">goal</span><span>+1</span>';b.style.background='color-mix(in srgb, var(--good) 70%, var(--surface))';}
+      else if(k==='P'){html='<span class="lbl">pit</span><span>−1</span>';b.style.background='color-mix(in srgb, var(--bad) 70%, var(--surface))';}
+      else{const v=value(i),g=greedy(i);const p=Math.min(1,Math.abs(v))*55;
+        b.style.background=v>0?`color-mix(in srgb, var(--good) ${p}%, var(--surface))`:v<0?`color-mix(in srgb, var(--bad) ${p}%, var(--surface))`:'var(--surface)';
+        html=(k==='S'?'<span class="lbl">start</span>':'')+`<span class="arr">${g>=0?ACTS[g].g:'·'}</span><span>${fmt(v)}</span>`;}
+      b.innerHTML=html;b.setAttribute('aria-label',`row ${Math.floor(i/C)+1} column ${i%C+1}`);}
+    if(st.mode==='vi')$('stats').textContent=`Sweeps: ${st.sweeps}`+(st.lastDelta!=null?` · biggest change last sweep: ${st.lastDelta.toFixed(4)}`:'');
+    else{const avg=st.lastSteps.length?(st.lastSteps.reduce((a,b)=>a+b,0)/st.lastSteps.length).toFixed(1):'–';
+      $('stats').textContent=`Episodes: ${st.episodes} · avg steps (last 20): ${avg}`;}
+    explain();}
+
+  function explain(){const e=$('explain'),i=st.sel,k=kind(i);
+    if(k==='G'||k==='P'){e.innerHTML=`<h5>${k==='G'?'Goal':'Pit'} square</h5><p style="margin:0">The game ends here, so its future value is 0. The ${k==='G'?'+1':'−1'} is paid as the reward for stepping in. Click an ordinary square.</p>`;return;}
+    const r=Math.floor(i/C)+1,c=i%C+1;
+    if(st.mode==='vi'){
+      let rows=[],best=-Infinity,ba=0;
+      for(let a=0;a<4;a++){const j=move(i,a),rr=rew(j),v=rr+st.gamma*st.V[j];rows.push({a,j,rr,v});if(v>best){best=v;ba=a;}}
+      e.innerHTML=`<h5>Bellman at row ${r}, col ${c}</h5>`+
+        `<div class="row" style="color:var(--muted)">V(s) = max over a of [ r + γ·V(s′) ]</div>`+
+        rows.map(o=>`<div class="row${o.a===ba?' best':''}">${ACTS[o.a].g} ${ACTS[o.a].n.padEnd(5,' ')}: ${fmt(o.rr)} + ${st.gamma.toFixed(2)} × ${fmt(st.V[o.j])} = ${fmt(o.v)}${o.j===i?' (bumps, stays)':''}</div>`).join('')+
+        `<div class="row" style="margin-top:6px">next sweep sets V(s) = <b>${fmt(best)}</b> (now ${fmt(st.V[i])})</div>`;
+    }else{
+      const q=st.Q[i],m=Math.max(...q),allz=q.every(x=>x===0);
+      e.innerHTML=`<h5>Q-table row for row ${r}, col ${c}</h5>`+
+        q.map((v,a)=>`<div class="row${!allz&&v===m?' best':''}">Q(s, ${ACTS[a].g} ${ACTS[a].n}) = ${fmt(v)}</div>`).join('')+
+        `<div class="row" style="margin-top:6px;color:var(--muted)">after each step: Q(s,a) += α·[ r + γ·max Q(s′,·) − Q(s,a) ]</div>`+
+        (allz?'<p style="margin:6px 0 0">All zeros: the agent has never tried anything here yet.</p>':'');
+    }}
+
+  function stopTimer(){if(st.timer){clearInterval(st.timer);st.timer=null;}$('b-play').textContent='Play until settled';}
+  function setMode(m){stopTimer();st.mode=m;st.agent=-1;
+    $('tab-vi').setAttribute('aria-selected',m==='vi');$('tab-ql').setAttribute('aria-selected',m==='ql');
+    $('btns-vi').hidden=m!=='vi';$('btns-ql').hidden=m!=='ql';$('ql-sliders').hidden=m!=='ql';render();}
+  $('tab-vi').onclick=()=>setMode('vi');$('tab-ql').onclick=()=>setMode('ql');
+  $('b-sweep').onclick=()=>{stopTimer();sweep();render();};
+  $('b-play').onclick=()=>{if(st.timer){stopTimer();return;}$('b-play').textContent='Pause';
+    st.timer=setInterval(()=>{const d=sweep();render();if(d<1e-4||st.sweeps>200)stopTimer();},250);};
+  $('b-ep1').onclick=()=>{episode();render();};
+  $('b-ep100').onclick=()=>{for(let n=0;n<100;n++)episode();render();};
+  $('b-reset').onclick=()=>{stopTimer();st.agent=-1;
+    if(st.mode==='vi'){st.V=new Array(N).fill(0);st.sweeps=0;st.lastDelta=null;}
+    else{st.Q=Array.from({length:N},()=>[0,0,0,0]);st.episodes=0;st.lastSteps=[];}render();};
+  $('b-watch').onclick=()=>{stopTimer();let s=START,n=0;st.agent=s;render();
+    st.timer=setInterval(()=>{const a=greedy(s);if(a<0||isTerm(s)||n>=25){stopTimer();if(a<0&&!isTerm(s))$('stats').textContent+=' · no learned move here yet: train more';return;}
+      s=move(s,a);n++;st.agent=s;render();},300);};
+  function bind(id,out,key){const el=$(id);el.addEventListener('input',()=>{st[key]=parseFloat(el.value);$(out).textContent=st[key].toFixed(2);render();});}
+  bind('r-gamma','o-gamma','gamma');bind('r-eps','o-eps','eps');bind('r-alpha','o-alpha','alpha');
+
+  sweep();sweep();sweep();
+  setMode('vi');
+})();
+</script>
+</body>
+</html>
